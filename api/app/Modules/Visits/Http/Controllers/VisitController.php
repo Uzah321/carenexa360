@@ -9,6 +9,7 @@ use App\Modules\Visits\Http\Requests\UpdateVisitRequest;
 use App\Modules\Visits\Http\Resources\VisitResource;
 use App\Modules\Visits\Models\Visit;
 use App\Modules\Visits\Support\SchedulingRoles;
+use App\Modules\Visits\Support\VisitAssignmentNotifier;
 use App\Support\Scheduling\ScheduleOverlap;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -75,6 +76,11 @@ class VisitController extends Controller
 
         $visits->load(['serviceUser', 'carer']);
 
+        // Deferred past the response — there's no queue worker running here,
+        // so this is what keeps an outbound SendGrid call (or a slow/failing
+        // one) from adding latency to the scheduling action that triggered it.
+        dispatch(fn () => VisitAssignmentNotifier::notifyBatch($visits))->afterResponse();
+
         return response()->json([
             'data' => $visits->count() === 1
                 ? (new VisitResource($visits->first()))->resolve($request)
@@ -133,10 +139,21 @@ class VisitController extends Controller
 
         $warnings = $this->skillWarnings($carerId, $request->validated('required_skills', $visit->required_skills ?? []));
 
+        $previousCarerId = $visit->carer_id;
+
         $visit->update($request->validated());
 
+        $fresh = $visit->fresh()->load(['serviceUser', 'carer']);
+
+        // Only a genuine new assignment — unassigning, or an edit that leaves
+        // the carer untouched, has no one new to tell. Deferred past the
+        // response for the same reason as store() above.
+        if ($fresh->carer_id && $fresh->carer_id !== $previousCarerId) {
+            dispatch(fn () => VisitAssignmentNotifier::notify($fresh))->afterResponse();
+        }
+
         return response()->json([
-            'data' => (new VisitResource($visit->fresh()->load(['serviceUser', 'carer'])))->resolve($request),
+            'data' => (new VisitResource($fresh))->resolve($request),
             'warnings' => $warnings,
         ]);
     }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   Alert,
   Button,
@@ -6,6 +6,7 @@ import {
   CardBody,
   DataTable,
   FormField,
+  Input,
   Modal,
   PageHeader,
   RowActionsMenu,
@@ -17,7 +18,92 @@ import {
 import { useAuth } from "../../../lib/auth-context";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { ADMINISTRATION_ROLES, STAFF_ASSIGNABLE_ROLES, type UserRoleAssignment } from "../../../lib/types";
-import { useUpdateUserRole, useUserRoles } from "../../identity/api";
+import { useCreateUserRole, useUpdateUserRole, useUserRoles, type CreateUserInput } from "../../identity/api";
+
+const EMPTY_NEW_USER: CreateUserInput = { name: "", email: "", password: "", role: STAFF_ASSIGNABLE_ROLES[0] };
+
+function NewUserModal({ onClose }: { onClose: () => void }) {
+  const createUser = useCreateUserRole();
+  const [form, setForm] = useState<CreateUserInput>(EMPTY_NEW_USER);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await createUser.mutateAsync(form);
+      onClose();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not create this user. Please try again."));
+    }
+  }
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="New User"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button form="new-user-form" type="submit" isLoading={createUser.isPending}>
+            Create
+          </Button>
+        </>
+      }
+    >
+      <form id="new-user-form" onSubmit={handleSubmit}>
+        {error && (
+          <div className="mb-4">
+            <Alert tone="danger">{error}</Alert>
+          </div>
+        )}
+        <FormField label="Name" htmlFor="new-user-name">
+          <Input
+            id="new-user-name"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </FormField>
+        <FormField label="Email" htmlFor="new-user-email">
+          <Input
+            id="new-user-email"
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </FormField>
+        <FormField label="Temporary password" htmlFor="new-user-password">
+          <Input
+            id="new-user-password"
+            type="text"
+            required
+            minLength={8}
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+        </FormField>
+        <FormField label="Role" htmlFor="new-user-role">
+          <Select
+            id="new-user-role"
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+          >
+            {STAFF_ASSIGNABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </form>
+    </Modal>
+  );
+}
 
 function ChangeRoleModal({
   target,
@@ -79,6 +165,7 @@ export function UserRolesPermissionsPage() {
   const isAuthorized = hasAnyRole(ADMINISTRATION_ROLES);
   const { data: users, isLoading } = useUserRoles();
   const [editTarget, setEditTarget] = useState<UserRoleAssignment | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   if (!isAuthorized) {
     return (
@@ -115,11 +202,13 @@ export function UserRolesPermissionsPage() {
       <PageHeader
         title="User Roles & Permissions"
         description="Every staff member's role determines what they can see and do across the system."
+        actions={<Button onClick={() => setIsCreateOpen(true)}>New User</Button>}
       />
 
       <DataTable columns={columns} rows={users ?? []} rowKey={(row) => row.id} isLoading={isLoading} />
 
       {editTarget && <ChangeRoleModal target={editTarget} onClose={() => setEditTarget(null)} />}
+      {isCreateOpen && <NewUserModal onClose={() => setIsCreateOpen(false)} />}
     </div>
   );
 }

@@ -150,6 +150,7 @@ Route::prefix('v1')->group(function () {
 
             Route::prefix('user-roles')->group(function () {
                 Route::get('/', [UserRoleController::class, 'index']);
+                Route::post('/', [UserRoleController::class, 'store']);
                 Route::patch('/{user}', [UserRoleController::class, 'update']);
             });
 

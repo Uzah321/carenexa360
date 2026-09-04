@@ -27,13 +27,24 @@ class DatabaseSeeder extends Seeder
             'tenant_id' => DefaultRoles::PLATFORM_TEAM_ID,
         ]);
 
-        $platformAdmin = User::factory()->create([
-            'tenant_id' => null,
-            'name' => 'Platform Admin',
-            'email' => 'admin@carenexa360.test',
-            'password' => 'password',
-        ]);
-        $platformAdmin->assignRole($superAdminRole);
+        // Real inboxes (not a .test domain) so outbound email — SendGrid
+        // notifications included — actually has somewhere to land.
+        $platformSuperUsers = [
+            ['name' => 'Dingulwazi Zondo', 'email' => 'dingulwazi.zondo@innovativestart.co.uk'],
+            ['name' => 'Trevor Ndlovu', 'email' => 'trevor.ndlovu@innovativestart.co.uk'],
+        ];
+        foreach ($platformSuperUsers as $superUser) {
+            // User::create(), not the factory — keeps this seeder runnable
+            // against a --no-dev (Faker-less) production install.
+            $user = User::create([
+                'tenant_id' => null,
+                'name' => $superUser['name'],
+                'email' => $superUser['email'],
+                'email_verified_at' => now(),
+                'password' => 'password',
+            ]);
+            $user->assignRole($superAdminRole);
+        }
 
         $tenant = Tenant::create([
             'name' => 'Demo Care Group',
