@@ -27,10 +27,11 @@ class CarerLocationController extends Controller
     }
 
     /**
-     * "Checked in" here means on duty (has an open DutyPeriod today) — not
-     * merely mid-visit — so a carer travelling between clients still shows
-     * as trackable, matching what the map itself already plots (it draws a
-     * trail from every location ping today, visit or no visit).
+     * "Checked in" here means on duty (has an open DutyPeriod — regardless of
+     * which day it started) — not merely mid-visit — so a carer travelling
+     * between clients still shows as trackable, matching what the map itself
+     * already plots (it draws a trail from every location ping today, visit
+     * or no visit).
      */
     public function live(Request $request)
     {
@@ -45,7 +46,15 @@ class CarerLocationController extends Controller
         [$dayStart, $dayEnd] = TenantClock::dayBoundsUtc($tenantId, $today);
         $branchId = $request->query('branch_id');
 
-        $dutyPeriods = DutyPeriod::whereBetween('started_at', [$dayStart, $dayEnd])
+        // On duty is timeless — an open shift stays open no matter which
+        // calendar day it started (an overnight shift, or a carer who simply
+        // hasn't checked out yet), so it must never be excluded by a
+        // started_at-today filter. Only "checked out" is actually day-scoped:
+        // that carer showing up under "Completed today" specifically.
+        $dutyPeriods = DutyPeriod::where(function ($query) use ($dayStart, $dayEnd) {
+                $query->whereNull('ended_at')
+                    ->orWhereBetween('ended_at', [$dayStart, $dayEnd]);
+            })
             ->with('carer.staffProfile')
             ->get()
             ->filter(fn (DutyPeriod $period) => ! $branchId || $period->carer?->staffProfile?->branch_id == $branchId)

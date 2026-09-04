@@ -18,7 +18,14 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use BelongsToTenant, HasApiTokens, HasAuditLog, HasFactory, HasRoles, Notifiable, SoftDeletes;
+    use BelongsToTenant, HasApiTokens, HasAuditLog, HasFactory, HasRoles, Notifiable, SoftDeletes {
+        // hasAnyRole() is a trait method, not an inherited one — `parent::`
+        // can't reach it (it would hit Eloquent's __call and throw
+        // BadMethodCallException for every non-platform-admin user). Alias
+        // the trait's original under another name so the override below can
+        // actually call it.
+        HasRoles::hasAnyRole as protected baseHasAnyRole;
+    }
 
     protected $fillable = [
         'tenant_id',
@@ -72,7 +79,7 @@ class User extends Authenticatable
             return true;
         }
 
-        return parent::hasAnyRole(...$roles);
+        return $this->baseHasAnyRole(...$roles);
     }
 
     public function staffProfile(): HasOne
