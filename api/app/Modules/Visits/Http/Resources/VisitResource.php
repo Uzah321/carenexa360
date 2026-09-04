@@ -19,8 +19,13 @@ class VisitResource extends JsonResource
             'carer_id' => $this->carer_id,
             'carer_name' => $this->whenLoaded('carer', fn () => $this->carer?->name),
             'visit_date' => $this->visit_date?->toDateString(),
-            'start_time' => $this->start_time,
-            'end_time' => $this->end_time,
+            // The start_time/end_time columns aren't cast, so the DB driver
+            // hands back whatever it stores (often "H:i:s"). Trim to "H:i" so
+            // this always matches what UpdateVisitRequest requires — a value
+            // round-tripped through the edit form without being touched must
+            // still pass validation on save.
+            'start_time' => $this->start_time ? substr($this->start_time, 0, 5) : null,
+            'end_time' => $this->end_time ? substr($this->end_time, 0, 5) : null,
             'care_tasks' => $this->care_tasks ?? [],
             'completed_care_tasks' => $this->completed_care_tasks ?? [],
             'medication_tasks' => $this->medication_tasks,
