@@ -3,6 +3,7 @@ import { Alert, Button, FormField, Input, Modal, Select, TagInput } from "../../
 import { useServiceUsers } from "../../service-users/api";
 import { useCreateVisit, type CreateVisitInput } from "../api";
 import { todayIso } from "../../../lib/dates";
+import { COMMON_CARE_TASKS } from "../../../lib/types";
 
 function errorMessage(err: unknown): string {
   const response = (err as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } })
@@ -161,6 +162,7 @@ export function AssignTaskModal({
             value={fields.care_tasks}
             onChange={(care_tasks) => setFields({ ...fields, care_tasks })}
             placeholder="e.g. Morning wash"
+            suggestions={COMMON_CARE_TASKS}
           />
         </FormField>
       </form>

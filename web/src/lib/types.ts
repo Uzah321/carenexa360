@@ -310,6 +310,26 @@ export type VisitStatus = (typeof VISIT_STATUSES)[number];
 export const VISIT_PRIORITIES = ["low", "medium", "high"] as const;
 export type VisitPriority = (typeof VISIT_PRIORITIES)[number];
 
+/** Offered as quick-pick suggestions wherever a visit's care tasks are
+ * entered — not an enum, since care_tasks stays free text for anything
+ * that doesn't fit this list. */
+export const COMMON_CARE_TASKS = [
+  "Personal care",
+  "Morning wash",
+  "Bathing/showering",
+  "Dressing",
+  "Continence care",
+  "Meal preparation",
+  "Medication prompt",
+  "Medication administration",
+  "Mobility support",
+  "Companionship",
+  "Light housekeeping",
+  "Shopping",
+  "Wound care",
+  "Clinical observations",
+];
+
 export interface Visit {
   id: number;
   service_user_id: number;
