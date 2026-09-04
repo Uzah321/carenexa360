@@ -79,6 +79,29 @@ function FocusCarer({
   return null;
 }
 
+/**
+ * Sets the initial view once live data first arrives, when no specific
+ * carer was requested via ?carer= — centers on whoever most recently
+ * checked in, since they're the most likely reason someone opened this
+ * page without already knowing who to look for. Unlike FocusCarer this
+ * only pans (keeps the current zoom, no popup) — landing here "cold"
+ * should still show the surrounding area, not zoom in tight on one marker.
+ */
+function DefaultCenter({ carer }: { carer: LiveMapCarer | undefined }) {
+  const map = useMap();
+  const appliedRef = useRef(false);
+
+  useEffect(() => {
+    if (appliedRef.current || !carer) return;
+    const lastPoint = carer.trail.at(-1);
+    if (!lastPoint) return;
+    map.setView([lastPoint.latitude, lastPoint.longitude], map.getZoom());
+    appliedRef.current = true;
+  }, [carer, map]);
+
+  return null;
+}
+
 export function LiveMapPage() {
   const { user } = useAuth();
   const [branchId, setBranchId] = useState<number | null>(null);
@@ -96,16 +119,21 @@ export function LiveMapPage() {
   const focusedCarer = focusedCarerId != null ? carersWithTrail.find((c) => c.user_id === focusedCarerId) : undefined;
   const focusedCarerUnavailable = focusedCarerId != null && Boolean(data) && !focusedCarer;
 
-  const center = useMemo<[number, number]>(() => {
-    const lastPoint = carersWithTrail[0]?.trail.at(-1);
-    return lastPoint ? [lastPoint.latitude, lastPoint.longitude] : DEFAULT_CENTER;
-    // Only computed once, from whatever the first live payload looks like —
-    // MapContainer's `center` prop only sets the initial view, so this
-    // deliberately doesn't recompute on every 20s refetch (that would jerk
-    // the map around under the user while they're looking at it). Jumping to
-    // a specific carer once their data loads is handled by FocusCarer above.
+  // Whoever most recently checked in, among those we actually have a
+  // location for — the default the map centers on when nobody specific was
+  // asked for.
+  const mostRecentlyCheckedInCarer = useMemo(() => {
+    if (!data) return undefined;
+    const byRecency = [...data.checked_in.items].sort(
+      (a, b) => new Date(b.checked_in_at ?? 0).getTime() - new Date(a.checked_in_at ?? 0).getTime(),
+    );
+    for (const person of byRecency) {
+      const match = carersWithTrail.find((c) => c.user_id === person.user_id);
+      if (match) return match;
+    }
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data]);
 
   return (
     <div>
@@ -181,7 +209,7 @@ export function LiveMapPage() {
           </ul>
         </div>
 
-        <MapContainer center={center} zoom={13} style={{ height: "600px", width: "100%" }}>
+        <MapContainer center={DEFAULT_CENTER} zoom={13} style={{ height: "600px", width: "100%" }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -212,7 +240,11 @@ export function LiveMapPage() {
               </Fragment>
             );
           })}
-          {focusedCarerId != null && <FocusCarer carer={focusedCarer} markerRefs={markerRefs} />}
+          {focusedCarerId != null ? (
+            <FocusCarer carer={focusedCarer} markerRefs={markerRefs} />
+          ) : (
+            <DefaultCenter carer={mostRecentlyCheckedInCarer} />
+          )}
         </MapContainer>
       </Card>
 
