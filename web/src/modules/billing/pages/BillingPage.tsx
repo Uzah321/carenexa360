@@ -18,6 +18,7 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { formatCurrency } from "../../../lib/currency";
 import { useServiceUsers } from "../../service-users/api";
 import {
   useCreateFunder,
@@ -106,7 +107,7 @@ function InvoicesTab() {
     { key: "service_user", header: "Service User", render: (row) => row.service_user_name ?? "—" },
     { key: "funder", header: "Funder", render: (row) => row.funder_name ?? "Self-funded" },
     { key: "period", header: "Period", render: (row) => `${row.period_start} – ${row.period_end}` },
-    { key: "total", header: "Total", render: (row) => `${row.currency} ${row.total}` },
+    { key: "total", header: "Total", render: (row) => formatCurrency(row.total, row.currency) },
     {
       key: "status",
       header: "Status",
@@ -267,7 +268,7 @@ function FundersTab() {
     { key: "name", header: "Name", render: (row) => row.name },
     { key: "type", header: "Type", render: (row) => row.type.replaceAll("_", " ") },
     { key: "contact_name", header: "Contact", render: (row) => row.contact_name ?? "—" },
-    { key: "rate", header: "Default Rate", render: (row) => row.default_hourly_rate ?? "—" },
+    { key: "rate", header: "Default Rate", render: (row) => formatCurrency(row.default_hourly_rate) },
     {
       key: "status",
       header: "Status",

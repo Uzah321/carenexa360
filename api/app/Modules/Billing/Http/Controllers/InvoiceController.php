@@ -56,7 +56,7 @@ class InvoiceController extends Controller
                 'issue_date' => now()->toDateString(),
                 'due_date' => $request->validated('due_date'),
                 'status' => 'draft',
-                'currency' => Tenant::find($serviceUser->tenant_id)?->currency ?? 'USD',
+                'currency' => Tenant::find($serviceUser->tenant_id)?->currency ?? 'GBP',
                 'notes' => $request->validated('notes'),
                 'created_by' => $request->user()->id,
             ]);

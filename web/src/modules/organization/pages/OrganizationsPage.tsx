@@ -43,7 +43,7 @@ export function OrganizationsPage() {
     slug: "",
     country: "",
     timezone: "UTC",
-    currency: "USD",
+    currency: "GBP",
     locale: "en",
   });
   const [createError, setCreateError] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export function OrganizationsPage() {
     try {
       await createTenant.mutateAsync(form);
       setIsCreateOpen(false);
-      setForm({ name: "", slug: "", country: "", timezone: "UTC", currency: "USD", locale: "en" });
+      setForm({ name: "", slug: "", country: "", timezone: "UTC", currency: "GBP", locale: "en" });
     } catch (err) {
       setCreateError(apiErrorMessage(err, "Could not create the organization. Please try again."));
     }

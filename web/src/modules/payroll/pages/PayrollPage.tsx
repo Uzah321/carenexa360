@@ -17,6 +17,7 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { formatCurrency } from "../../../lib/currency";
 import {
   useCreatePayPeriod,
   useGeneratePayslips,
@@ -51,9 +52,9 @@ function PayPeriodDrawer({ payPeriodId }: { payPeriodId: number }) {
   const columns: Column<Payslip>[] = [
     { key: "user", header: "Staff", render: (row) => row.user_name ?? "—" },
     { key: "hours", header: "Hours", render: (row) => row.regular_hours },
-    { key: "gross", header: "Gross", render: (row) => row.gross_pay },
-    { key: "deductions", header: "Deductions", render: (row) => row.deductions },
-    { key: "net", header: "Net", render: (row) => row.net_pay },
+    { key: "gross", header: "Gross", render: (row) => formatCurrency(row.gross_pay) },
+    { key: "deductions", header: "Deductions", render: (row) => formatCurrency(row.deductions) },
+    { key: "net", header: "Net", render: (row) => formatCurrency(row.net_pay) },
     {
       key: "status",
       header: "Status",
@@ -137,7 +138,7 @@ export function PayrollPage() {
   const myColumns: Column<Payslip>[] = [
     { key: "period", header: "Period", render: (row) => `${row.pay_period_start} – ${row.pay_period_end}` },
     { key: "hours", header: "Hours", render: (row) => row.regular_hours },
-    { key: "net", header: "Net Pay", render: (row) => row.net_pay },
+    { key: "net", header: "Net Pay", render: (row) => formatCurrency(row.net_pay) },
     {
       key: "status",
       header: "Status",

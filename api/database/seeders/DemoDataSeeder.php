@@ -860,7 +860,7 @@ class DemoDataSeeder extends Seeder
                 'subtotal' => 0,
                 'tax_amount' => 0,
                 'total' => 0,
-                'currency' => 'USD',
+                'currency' => 'GBP',
                 'notes' => null,
                 'created_by' => $this->staff['Finance Officer']->id,
             ]);

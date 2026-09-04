@@ -51,7 +51,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'demo-care-group',
             'country' => 'Zimbabwe',
             'timezone' => 'Africa/Harare',
-            'currency' => 'USD',
+            'currency' => 'GBP',
             'locale' => 'en',
             'plan' => 'professional',
             'status' => 'active',
