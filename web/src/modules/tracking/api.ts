@@ -45,7 +45,7 @@ export interface LiveMapResponse {
   carers: LiveMapCarer[];
 }
 
-export function useLiveMap(branchId: number | null) {
+export function useLiveMap(branchId: number | null, enabled = true) {
   return useQuery({
     queryKey: ["carer-locations", "live", branchId],
     queryFn: async () => {
@@ -54,6 +54,7 @@ export function useLiveMap(branchId: number | null) {
       });
       return data;
     },
+    enabled,
     refetchInterval: 20000,
   });
 }

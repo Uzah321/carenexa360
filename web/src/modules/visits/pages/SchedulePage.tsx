@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Alert, Card, FormField, Input, PageHeader, Select } from "../../../design-system";
 import { useAuth } from "../../../lib/auth-context";
-import { deliversVisits } from "../../../lib/types";
+import { deliversVisits, TRACKING_ROLES } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
 import { useBranches } from "../../organization/api";
 import { useStaff } from "../../staff/api";
 import { useServiceUsers } from "../../service-users/api";
+import { useLiveMap } from "../../tracking/api";
 import { AssignTaskModal } from "../components/AssignTaskModal";
 import { EditVisitModal } from "../components/EditVisitModal";
 import { useRescheduleVisit, useVisits } from "../api";
@@ -71,7 +73,11 @@ interface DragInfo {
 }
 
 export function SchedulePage() {
-  const { user } = useAuth();
+  const { user, hasAnyRole } = useAuth();
+  const navigate = useNavigate();
+  // Live Map is restricted to a smaller role set than Schedule itself — only
+  // offer the "view location" jump to people who can actually land on it.
+  const canViewLiveMap = hasAnyRole(TRACKING_ROLES);
   const [date, setDate] = useState(todayIso);
   // Two ways to read the same day: "client" asks whether everyone's care is
   // covered, "carer" asks whether anyone's round is overloaded.
@@ -107,7 +113,19 @@ export function SchedulePage() {
   const { data: staff } = useStaff(1, 100);
   const { data: visitsData } = useVisits({ date, per_page: 100 });
   const { data: serviceUsersData } = useServiceUsers(1, { status: "active", perPage: 200 });
+  const { data: liveMapData } = useLiveMap(branchId, canViewLiveMap);
   const rescheduleVisit = useRescheduleVisit();
+
+  // Who is actually on duty right now, so a carer's name can jump straight to
+  // their live location instead of just opening the assign/drag chip.
+  const checkedInUserIds = useMemo(
+    () => new Set((liveMapData?.carers ?? []).filter((c) => c.is_checked_in).map((c) => c.user_id)),
+    [liveMapData],
+  );
+
+  function goToCarerLocation(userId: number) {
+    navigate(`/live-map?carer=${userId}`);
+  }
 
   // Memoized so the `?? []` fallback doesn't hand every dependent useMemo a
   // brand-new array identity on each render and defeat their caching.
@@ -552,31 +570,45 @@ export function SchedulePage() {
             Drag one onto a visit to hand it to them, or click to book a new visit.
           </p>
           <div className="flex flex-wrap gap-2">
-            {carersWithoutVisits.map((carer) => (
-              <button
-                key={carer.id}
-                type="button"
-                onPointerDown={(e) => startCarerDrag(e, carer)}
-                onClick={() => {
-                  // A drag that happened to finish on the chip also fires a click —
-                  // don't let it open the modal on top of the assignment just made.
-                  if (suppressChipClickRef.current) {
-                    suppressChipClickRef.current = false;
-                    return;
-                  }
-                  setAssigningCarer({ user_id: carer.user_id, name: carer.name });
-                }}
-                style={{ touchAction: "none" }}
-                className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
-                  carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
-                }`}
-              >
-                {carer.name}
-                <span className="rounded-full bg-tealtint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
-                  Assign
-                </span>
-              </button>
-            ))}
+            {carersWithoutVisits.map((carer) => {
+              const isCheckedIn = canViewLiveMap && checkedInUserIds.has(carer.user_id);
+              return (
+                <div key={carer.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => startCarerDrag(e, carer)}
+                    onClick={() => {
+                      // A drag that happened to finish on the chip also fires a click —
+                      // don't let it open the modal on top of the assignment just made.
+                      if (suppressChipClickRef.current) {
+                        suppressChipClickRef.current = false;
+                        return;
+                      }
+                      setAssigningCarer({ user_id: carer.user_id, name: carer.name });
+                    }}
+                    style={{ touchAction: "none" }}
+                    className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
+                      carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
+                    }`}
+                  >
+                    {carer.name}
+                    <span className="rounded-full bg-tealtint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                      Assign
+                    </span>
+                  </button>
+                  {isCheckedIn && (
+                    <button
+                      type="button"
+                      onClick={() => goToCarerLocation(carer.user_id)}
+                      title={`${carer.name} is checked in — view their location on the Live Map`}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lime/40 bg-limetint text-lime shadow-sm transition-colors duration-150 hover:bg-lime hover:text-white"
+                    >
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -636,7 +668,19 @@ export function SchedulePage() {
                   className="sticky left-0 z-10 flex shrink-0 items-center border-r border-line bg-white px-3 text-sm font-medium text-ink"
                   style={{ width: NAME_COLUMN_WIDTH, height: ROW_HEIGHT }}
                 >
-                  <span className="truncate">{carer.name}</span>
+                  {canViewLiveMap && checkedInUserIds.has(carer.user_id) ? (
+                    <button
+                      type="button"
+                      onClick={() => goToCarerLocation(carer.user_id)}
+                      title={`${carer.name} is checked in — view their location on the Live Map`}
+                      className="-ml-1 flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pl-1 pr-2 transition-colors duration-150 hover:bg-limetint"
+                    >
+                      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-lime" />
+                      <span className="truncate">{carer.name}</span>
+                    </button>
+                  ) : (
+                    <span className="truncate">{carer.name}</span>
+                  )}
                 </div>
                 <div className="relative" style={{ width: timelineWidth, height: ROW_HEIGHT }}>
                   {HOURS.map((hour) => (
@@ -700,33 +744,45 @@ export function SchedulePage() {
               <div className="flex flex-wrap items-start gap-2 p-3" style={{ width: timelineWidth }}>
                 {carerPool.map((carer) => {
                   const load = loadByCarer.get(carer.user_id) ?? 0;
+                  const isCheckedIn = canViewLiveMap && checkedInUserIds.has(carer.user_id);
                   return (
-                    <button
-                      key={carer.id}
-                      type="button"
-                      onPointerDown={(e) => startCarerDrag(e, carer)}
-                      onClick={() => {
-                        if (suppressChipClickRef.current) {
-                          suppressChipClickRef.current = false;
-                          return;
-                        }
-                        setAssigningCarer({ user_id: carer.user_id, name: carer.name });
-                      }}
-                      style={{ touchAction: "none" }}
-                      title={`${carer.name} — ${load} visit${load === 1 ? "" : "s"} today. Drag onto a client to give them work, or click to book a visit.`}
-                      className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
-                        carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
-                      }`}
-                    >
-                      {carer.name}
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-                          load === 0 ? "bg-paper text-inksoft" : "bg-tealtint text-teal"
+                    <div key={carer.id} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onPointerDown={(e) => startCarerDrag(e, carer)}
+                        onClick={() => {
+                          if (suppressChipClickRef.current) {
+                            suppressChipClickRef.current = false;
+                            return;
+                          }
+                          setAssigningCarer({ user_id: carer.user_id, name: carer.name });
+                        }}
+                        style={{ touchAction: "none" }}
+                        title={`${carer.name} — ${load} visit${load === 1 ? "" : "s"} today. Drag onto a client to give them work, or click to book a visit.`}
+                        className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
+                          carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
                         }`}
                       >
-                        {load}
-                      </span>
-                    </button>
+                        {carer.name}
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                            load === 0 ? "bg-paper text-inksoft" : "bg-tealtint text-teal"
+                          }`}
+                        >
+                          {load}
+                        </span>
+                      </button>
+                      {isCheckedIn && (
+                        <button
+                          type="button"
+                          onClick={() => goToCarerLocation(carer.user_id)}
+                          title={`${carer.name} is checked in — view their location on the Live Map`}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lime/40 bg-limetint text-lime shadow-sm transition-colors duration-150 hover:bg-lime hover:text-white"
+                        >
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
                 {carerPool.length === 0 && (

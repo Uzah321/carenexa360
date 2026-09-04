@@ -1,7 +1,8 @@
-import { DivIcon } from "leaflet";
-import { Fragment, useMemo, useState } from "react";
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
-import { Card, PageHeader, Select } from "../../../design-system";
+import { DivIcon, type Marker as LeafletMarker } from "leaflet";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { useSearchParams } from "react-router-dom";
+import { Alert, Card, PageHeader, Select } from "../../../design-system";
 import { useAuth } from "../../../lib/auth-context";
 import { useBranches } from "../../organization/api";
 import { useLiveMap, type LiveMapCarer } from "../api";
@@ -22,13 +23,31 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function carerIcon(color: string, label: string) {
-  return new DivIcon({
-    html: `<div style="background:${color};color:white;border-radius:9999px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);">${label}</div>`,
+// Cached per (color, label, focused) so a 20s data refresh doesn't hand
+// react-leaflet a brand-new DivIcon identity for markers that haven't
+// actually changed — that was making it call marker.setIcon() on every poll,
+// which re-binds the marker's popup and silently closes one just opened.
+const iconCache = new Map<string, DivIcon>();
+
+function carerIcon(color: string, label: string, focused: boolean) {
+  const key = `${color}|${label}|${focused}`;
+  const cached = iconCache.get(key);
+  if (cached) return cached;
+
+  const size = focused ? 40 : 32;
+  const shadow = focused
+    ? `0 0 0 4px ${color}55, 0 2px 8px rgba(0,0,0,0.4)`
+    : "0 2px 6px rgba(0,0,0,0.35)";
+  const icon = new DivIcon({
+    html: `<div style="background:${color};color:white;border-radius:9999px;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-size:${
+      focused ? 13 : 12
+    }px;font-weight:700;border:2px solid white;box-shadow:${shadow};">${label}</div>`,
     className: "",
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
+  iconCache.set(key, icon);
+  return icon;
 }
 
 function formatTime(iso?: string) {
@@ -37,13 +56,45 @@ function formatTime(iso?: string) {
 
 const DEFAULT_CENTER: [number, number] = [-17.8252, 31.0335];
 
+/** Flies the map to a specific carer's last-known point once their live data
+ * arrives, and opens their marker popup — this is what makes "view their
+ * location" from elsewhere in the app land somewhere useful. */
+function FocusCarer({
+  carer,
+  markerRefs,
+}: {
+  carer: LiveMapCarer | undefined;
+  markerRefs: React.MutableRefObject<Map<number, LeafletMarker>>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!carer) return;
+    const lastPoint = carer.trail.at(-1);
+    if (!lastPoint) return;
+    map.flyTo([lastPoint.latitude, lastPoint.longitude], 16, { duration: 1 });
+    markerRefs.current.get(carer.user_id)?.openPopup();
+  }, [carer, map, markerRefs]);
+
+  return null;
+}
+
 export function LiveMapPage() {
   const { user } = useAuth();
   const [branchId, setBranchId] = useState<number | null>(null);
   const { data: branches } = useBranches(user?.tenant_id ?? 0);
   const { data } = useLiveMap(branchId);
+  const [searchParams] = useSearchParams();
+  const markerRefs = useRef(new Map<number, LeafletMarker>());
+
+  const focusedCarerId = useMemo(() => {
+    const raw = searchParams.get("carer");
+    return raw ? Number(raw) : null;
+  }, [searchParams]);
 
   const carersWithTrail: LiveMapCarer[] = (data?.carers ?? []).filter((carer) => carer.trail.length > 0);
+  const focusedCarer = focusedCarerId != null ? carersWithTrail.find((c) => c.user_id === focusedCarerId) : undefined;
+  const focusedCarerUnavailable = focusedCarerId != null && Boolean(data) && !focusedCarer;
 
   const center = useMemo<[number, number]>(() => {
     const lastPoint = carersWithTrail[0]?.trail.at(-1);
@@ -51,7 +102,8 @@ export function LiveMapPage() {
     // Only computed once, from whatever the first live payload looks like —
     // MapContainer's `center` prop only sets the initial view, so this
     // deliberately doesn't recompute on every 20s refetch (that would jerk
-    // the map around under the user while they're looking at it).
+    // the map around under the user while they're looking at it). Jumping to
+    // a specific carer once their data loads is handled by FocusCarer above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -61,6 +113,14 @@ export function LiveMapPage() {
         title="Live Map"
         description="Where your carers are right now, and the route they've taken between visits today."
       />
+
+      {focusedCarerUnavailable && (
+        <div className="mb-4">
+          <Alert tone="warning">
+            That carer isn't currently showing a live location — they may not be checked in right now.
+          </Alert>
+        </div>
+      )}
 
       <Card className="relative overflow-hidden p-0">
         <div className="absolute left-3 top-3 z-[1000] w-56">
@@ -87,7 +147,12 @@ export function LiveMapPage() {
           </div>
           <ul className="mb-3 space-y-1">
             {(data?.checked_in.items ?? []).map((person) => (
-              <li key={person.user_id} className="flex items-center justify-between text-xs">
+              <li
+                key={person.user_id}
+                className={`flex items-center justify-between rounded-lg px-1 text-xs ${
+                  person.user_id === focusedCarerId ? "bg-limetint" : ""
+                }`}
+              >
                 <span className="font-medium text-ink">{person.name}</span>
                 <span className="text-inksoft">{formatTime(person.checked_in_at)}</span>
               </li>
@@ -124,13 +189,18 @@ export function LiveMapPage() {
           {carersWithTrail.map((carer, index) => {
             const color = colorForCarer(index);
             const lastPoint = carer.trail.at(-1);
+            const focused = carer.user_id === focusedCarerId;
             return (
               <Fragment key={carer.user_id}>
                 <Polyline positions={carer.trail.map((p) => [p.latitude, p.longitude])} color={color} weight={4} />
                 {lastPoint && (
                   <Marker
+                    ref={(instance) => {
+                      if (instance) markerRefs.current.set(carer.user_id, instance);
+                      else markerRefs.current.delete(carer.user_id);
+                    }}
                     position={[lastPoint.latitude, lastPoint.longitude]}
-                    icon={carerIcon(color, initials(carer.name))}
+                    icon={carerIcon(color, initials(carer.name), focused)}
                   >
                     <Popup>
                       <strong>{carer.name}</strong>
@@ -142,6 +212,7 @@ export function LiveMapPage() {
               </Fragment>
             );
           })}
+          {focusedCarerId != null && <FocusCarer carer={focusedCarer} markerRefs={markerRefs} />}
         </MapContainer>
       </Card>
 
