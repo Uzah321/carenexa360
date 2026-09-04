@@ -614,7 +614,11 @@ export function SchedulePage() {
       )}
 
       <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        {/* Both axes scroll inside this one box, capped to a viewport-relative
+            height — so scrolling through a long list of rows moves only the
+            grid, not the header/date controls/legend above it. The hour
+            header and name column stay `sticky` to *this* scroll container. */}
+        <div className="max-h-[70vh] overflow-auto">
           <div className="relative" style={{ width: NAME_COLUMN_WIDTH + timelineWidth, minWidth: "100%" }}>
             {/* Hour header */}
             <div
