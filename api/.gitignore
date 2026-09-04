@@ -1,0 +1,41 @@
+/.phpunit.cache
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+
+# Runtime-generated: logs, compiled view/route/config cache, uploaded files,
+# and test-run artifacts. Missing from Laravel's stock .gitignore — added
+# when this project was first put under version control, so local dev
+# artifacts (demo uploads, per-machine cache) don't end up in the repo.
+/storage/logs/*.log
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/app/private/*
+!/storage/app/private/.gitignore
+/bootstrap/cache/*.php
+
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/auth.json
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed

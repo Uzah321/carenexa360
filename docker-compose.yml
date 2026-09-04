@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: carenexa360-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: carenexa360
+      POSTGRES_USER: carenexa
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - carenexa360-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: carenexa360-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - carenexa360-redis-data:/data
+
+volumes:
+  carenexa360-postgres-data:
+  carenexa360-redis-data:

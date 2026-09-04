@@ -1,0 +1,10 @@
+# Claude Code's own local session/config directory — not part of the app.
+.claude/
+
+# Loose shadcn/ui component scaffold, unused by web/ (which has its own
+# complete design-system) — not part of the deployed application.
+frontend files/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
