@@ -10,6 +10,7 @@ import {
   FormField,
   Input,
   Modal,
+  Pagination,
   RowActionsMenu,
   Select,
   StatusBadge,
@@ -23,6 +24,7 @@ import { useServiceUsers } from "../../service-users/api";
 import { useStaff } from "../../staff/api";
 import { deliversVisits } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
+import { todayIso } from "../../../lib/dates";
 
 const STATUS_TONE: Record<VisitStatus, "success" | "warning" | "neutral" | "danger" | "info"> = {
   scheduled: "info",
@@ -46,7 +48,12 @@ const EMPTY_FORM: CreateVisitInput = {
 const CANCELLABLE_STATUSES: VisitStatus[] = ["scheduled", "in_progress"];
 
 export function VisitsPage() {
-  const [date, setDate] = useState("");
+  // Defaults to today, matching Schedule/My Day — an unfiltered list sorted
+  // oldest-first buried new visits 20+ rows down with no pagination to reach
+  // them, which is exactly what made "create a visit" look like it silently
+  // did nothing.
+  const [date, setDate] = useState(todayIso());
+  const [page, setPage] = useState(1);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<CreateVisitInput>(EMPTY_FORM);
   const [repeats, setRepeats] = useState(false);
@@ -55,7 +62,7 @@ export function VisitsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useVisits({ date: date || undefined });
+  const { data, isLoading } = useVisits({ date: date || undefined, page });
   const { data: serviceUsers } = useServiceUsers(1);
   const { data: staff } = useStaff(1);
   const createVisit = useCreateVisit();
@@ -100,7 +107,15 @@ export function VisitsPage() {
       setRepeats(false);
       setWeekdays([]);
       setUntil("");
+      // Land back on page 1 so the visit just created — almost always the
+      // most recent thing sorted into the list — is actually on screen.
+      setPage(1);
     }
+  }
+
+  function openCreate() {
+    setForm({ ...EMPTY_FORM, visit_date: date || todayIso() });
+    setIsCreateOpen(true);
   }
 
   const columns: Column<Visit>[] = [
@@ -153,18 +168,28 @@ export function VisitsPage() {
             <Link to="/visits/route" className="text-sm font-medium text-teal hover:text-teal/90">
               View Route Planner
             </Link>
-            <Button onClick={() => setIsCreateOpen(true)}>New Visit</Button>
+            <Button onClick={openCreate}>New Visit</Button>
           </div>
         </div>
       </div>
 
       <FilterBar>
         <FormField label="Date" htmlFor="filter-date">
-          <Input id="filter-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input
+            id="filter-date"
+            type="date"
+            value={date}
+            onChange={(e) => {
+              setDate(e.target.value);
+              setPage(1);
+            }}
+          />
         </FormField>
       </FilterBar>
 
       <DataTable columns={columns} rows={data?.data ?? []} rowKey={(row) => row.id} isLoading={isLoading} />
+
+      {data && <Pagination currentPage={data.meta.current_page} lastPage={data.meta.last_page} onPageChange={setPage} />}
 
       <Modal
         isOpen={isCreateOpen}
