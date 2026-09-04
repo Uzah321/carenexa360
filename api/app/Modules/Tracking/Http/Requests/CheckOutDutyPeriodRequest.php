@@ -8,7 +8,9 @@ class CheckOutDutyPeriodRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real check is in the controller — only the duty period's own
+        // owner can check it out, tenant or not.
+        return true;
     }
 
     public function rules(): array

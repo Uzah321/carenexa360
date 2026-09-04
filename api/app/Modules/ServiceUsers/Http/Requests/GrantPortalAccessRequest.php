@@ -9,7 +9,8 @@ class GrantPortalAccessRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller.
+        return true;
     }
 
     public function rules(): array

@@ -10,12 +10,13 @@ class UpdateComplianceRequirementRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller.
+        return true;
     }
 
     public function rules(): array
     {
-        $tenantId = $this->user()->tenant_id;
+        $tenantId = $this->route('complianceRequirement')?->tenant_id;
 
         return [
             'name' => ['sometimes', 'string', 'max:255'],

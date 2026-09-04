@@ -8,7 +8,11 @@ class StoreMedicationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller (against
+        // the service user this medication belongs to) — this request has no
+        // route param to check against, and blocking platform admins here
+        // unconditionally would leave them permanently unable to reach it.
+        return true;
     }
 
     public function rules(): array

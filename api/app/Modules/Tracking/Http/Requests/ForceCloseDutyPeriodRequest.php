@@ -8,7 +8,8 @@ class ForceCloseDutyPeriodRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real role check is in the controller.
+        return true;
     }
 
     public function rules(): array

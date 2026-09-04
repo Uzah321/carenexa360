@@ -11,12 +11,14 @@ class StoreMedicationAdministrationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller (against
+        // the medication this administration record belongs to).
+        return true;
     }
 
     public function rules(): array
     {
-        $tenantId = $this->user()->tenant_id;
+        $tenantId = $this->route('medication')?->tenant_id;
 
         return [
             'visit_id' => [

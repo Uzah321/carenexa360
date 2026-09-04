@@ -10,12 +10,14 @@ class StoreObservationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller (against
+        // the service user this observation belongs to).
+        return true;
     }
 
     public function rules(): array
     {
-        $tenantId = $this->user()->tenant_id;
+        $tenantId = $this->route('serviceUser')?->tenant_id;
 
         return [
             'visit_id' => [

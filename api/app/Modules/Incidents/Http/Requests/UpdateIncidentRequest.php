@@ -10,12 +10,13 @@ class UpdateIncidentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return ! $this->user()->isPlatformAdmin();
+        // The real tenant-ownership check happens in the controller.
+        return true;
     }
 
     public function rules(): array
     {
-        $tenantId = $this->user()->tenant_id;
+        $tenantId = $this->route('incident')?->tenant_id;
 
         return [
             'type' => ['sometimes', 'string', Rule::in(Incident::TYPES)],
