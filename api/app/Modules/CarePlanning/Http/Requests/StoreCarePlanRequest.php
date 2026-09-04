@@ -14,11 +14,14 @@ class StoreCarePlanRequest extends FormRequest
         /** @var ServiceUser $serviceUser */
         $serviceUser = $this->route('serviceUser');
 
-        return $this->user()->tenant_id === $serviceUser->tenant_id;
+        return $this->user()->ownsTenant($serviceUser->tenant_id);
     }
 
     public function rules(): array
     {
+        /** @var ServiceUser $serviceUser */
+        $serviceUser = $this->route('serviceUser');
+
         return [
             'effective_from' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
@@ -33,7 +36,9 @@ class StoreCarePlanRequest extends FormRequest
             'sections.*.responsible_staff_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('users', 'id')->where('tenant_id', $this->user()->tenant_id),
+                // Scoped to the service user's tenant, not the acting user's
+                // — see StoreAssessmentResponseRequest for why.
+                Rule::exists('users', 'id')->where('tenant_id', $serviceUser->tenant_id),
             ],
             'sections.*.start_date' => ['nullable', 'date'],
             'sections.*.review_date' => ['nullable', 'date'],

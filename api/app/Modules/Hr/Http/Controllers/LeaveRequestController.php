@@ -45,7 +45,7 @@ class LeaveRequestController extends Controller
     public function update(UpdateLeaveRequestRequest $request, LeaveRequest $leaveRequest)
     {
         $user = $request->user();
-        abort_unless($user->tenant_id === $leaveRequest->tenant_id, 403);
+        abort_unless($user->ownsTenant($leaveRequest->tenant_id), 403);
 
         $status = $request->validated('status');
         $isHrAdmin = $user->hasAnyRole(HrRoles::ALLOWED);

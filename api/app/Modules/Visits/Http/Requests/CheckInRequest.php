@@ -12,7 +12,7 @@ class CheckInRequest extends FormRequest
         /** @var Visit $visit */
         $visit = $this->route('visit');
 
-        return $this->user()->tenant_id === $visit->tenant_id;
+        return $this->user()->ownsTenant($visit->tenant_id);
     }
 
     public function rules(): array

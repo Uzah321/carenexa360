@@ -24,7 +24,7 @@ class MedicationAdministrationController extends Controller
 
     public function store(StoreMedicationAdministrationRequest $request, Medication $medication)
     {
-        abort_unless($request->user()->tenant_id === $medication->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($medication->tenant_id), 403);
 
         $administration = $medication->administrations()->create([
             ...$request->validated(),

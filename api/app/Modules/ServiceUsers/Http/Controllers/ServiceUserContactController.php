@@ -37,7 +37,7 @@ class ServiceUserContactController extends Controller
 
     public function destroy(Request $request, ServiceUser $serviceUser, int $contact)
     {
-        abort_unless($request->user()->tenant_id === $serviceUser->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
 
         $serviceUser->contacts()->where('id', $contact)->firstOrFail()->delete();
 
@@ -46,7 +46,7 @@ class ServiceUserContactController extends Controller
 
     public function grantPortalAccess(GrantPortalAccessRequest $request, ServiceUser $serviceUser, ServiceUserContact $contact)
     {
-        abort_unless($request->user()->tenant_id === $serviceUser->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
         abort_unless($contact->service_user_id === $serviceUser->id, 404);
         abort_if($contact->user_id, 422, 'This contact already has portal access.');
 

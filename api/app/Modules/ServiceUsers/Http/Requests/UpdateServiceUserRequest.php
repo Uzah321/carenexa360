@@ -13,21 +13,26 @@ class UpdateServiceUserRequest extends FormRequest
         /** @var ServiceUser $serviceUser */
         $serviceUser = $this->route('serviceUser');
 
-        return $this->user()->tenant_id === $serviceUser->tenant_id;
+        return $this->user()->ownsTenant($serviceUser->tenant_id);
     }
 
     public function rules(): array
     {
+        /** @var ServiceUser $serviceUser */
+        $serviceUser = $this->route('serviceUser');
+
         return [
             'branch_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('branches', 'id')->where('tenant_id', $this->user()->tenant_id),
+                // Scoped to the service user's tenant, not the acting user's
+                // — see StoreAssessmentResponseRequest for why.
+                Rule::exists('branches', 'id')->where('tenant_id', $serviceUser->tenant_id),
             ],
             'care_manager_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('users', 'id')->where('tenant_id', $this->user()->tenant_id),
+                Rule::exists('users', 'id')->where('tenant_id', $serviceUser->tenant_id),
             ],
             'first_name' => ['sometimes', 'required', 'string', 'max:255'],
             'last_name' => ['sometimes', 'required', 'string', 'max:255'],

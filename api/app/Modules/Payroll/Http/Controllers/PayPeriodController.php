@@ -38,7 +38,7 @@ class PayPeriodController extends Controller
     public function show(Request $request, PayPeriod $payPeriod)
     {
         abort_unless($request->user()->hasAnyRole(PayrollRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $payPeriod->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($payPeriod->tenant_id), 403);
 
         return new PayPeriodResource($payPeriod->load(['payslips.user']));
     }
@@ -46,7 +46,7 @@ class PayPeriodController extends Controller
     public function generatePayslips(Request $request, PayPeriod $payPeriod)
     {
         abort_unless($request->user()->hasAnyRole(PayrollRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $payPeriod->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($payPeriod->tenant_id), 403);
 
         PayslipGenerator::generateForPeriod($payPeriod);
 

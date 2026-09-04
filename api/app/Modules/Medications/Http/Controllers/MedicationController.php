@@ -26,7 +26,7 @@ class MedicationController extends Controller
 
     public function store(StoreMedicationRequest $request, ServiceUser $serviceUser)
     {
-        abort_unless($request->user()->tenant_id === $serviceUser->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
 
         $medication = $serviceUser->medications()->create([
             ...$request->validated(),
@@ -52,7 +52,7 @@ class MedicationController extends Controller
 
     public function update(UpdateMedicationRequest $request, Medication $medication)
     {
-        abort_unless($request->user()->tenant_id === $medication->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($medication->tenant_id), 403);
 
         $medication->update($request->validated());
 

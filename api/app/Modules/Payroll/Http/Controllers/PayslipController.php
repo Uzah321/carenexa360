@@ -41,7 +41,7 @@ class PayslipController extends Controller
     public function update(UpdatePayslipRequest $request, Payslip $payslip)
     {
         abort_unless($request->user()->hasAnyRole(PayrollRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $payslip->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($payslip->tenant_id), 403);
 
         $attributes = $request->validated();
 

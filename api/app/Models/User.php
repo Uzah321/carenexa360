@@ -48,6 +48,33 @@ class User extends Authenticatable
         return is_null($this->tenant_id);
     }
 
+    /**
+     * Every authorization check in this codebase that gates on tenant
+     * ownership should go through this rather than comparing tenant_id
+     * directly — a platform admin's own tenant_id is null, so a bare
+     * `$user->tenant_id === $resource->tenant_id` always excludes them.
+     */
+    public function ownsTenant(?int $tenantId): bool
+    {
+        return $this->isPlatformAdmin() || $this->tenant_id === $tenantId;
+    }
+
+    /**
+     * A platform admin has no restrictions anywhere in the app. Every
+     * hasAnyRole() call in this codebase is a pure permission gate (never
+     * used to exclude a role), so short-circuiting here is the one place
+     * that grants full access instead of scattering isPlatformAdmin()
+     * escapes across every controller and form request.
+     */
+    public function hasAnyRole(...$roles): bool
+    {
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+
+        return parent::hasAnyRole(...$roles);
+    }
+
     public function staffProfile(): HasOne
     {
         return $this->hasOne(StaffProfile::class);

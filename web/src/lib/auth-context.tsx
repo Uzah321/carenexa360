@@ -62,7 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const hasAnyRole = useCallback(
-    (roles: readonly string[]) => roles.some((role) => user?.roles.includes(role)) ?? false,
+    // A platform admin (tenant_id === null) has no restrictions anywhere in
+    // the app — mirrors the same short-circuit on the User model backend
+    // side, so nav visibility and route guards match what the API actually
+    // allows instead of hiding things a platform admin can already do.
+    (roles: readonly string[]) =>
+      user ? user.tenant_id === null || roles.some((role) => user.roles.includes(role)) : false,
     [user],
   );
 

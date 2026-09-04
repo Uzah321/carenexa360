@@ -13,7 +13,7 @@ class UpdateShiftRequest extends FormRequest
         /** @var Shift $shift */
         $shift = $this->route('shift');
 
-        return $this->user()->tenant_id === $shift->tenant_id;
+        return $this->user()->ownsTenant($shift->tenant_id);
     }
 
     public function rules(): array

@@ -49,7 +49,7 @@ class IncidentController extends Controller
 
     public function update(UpdateIncidentRequest $request, Incident $incident)
     {
-        abort_unless($request->user()->tenant_id === $incident->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($incident->tenant_id), 403);
 
         $attributes = $request->validated();
 

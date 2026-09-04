@@ -48,7 +48,7 @@ class FunderController extends Controller
     public function update(UpdateFunderRequest $request, Funder $funder)
     {
         abort_unless($request->user()->hasAnyRole(FinanceRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $funder->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($funder->tenant_id), 403);
 
         $funder->update($request->validated());
 

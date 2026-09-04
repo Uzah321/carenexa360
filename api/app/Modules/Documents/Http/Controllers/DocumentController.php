@@ -61,7 +61,7 @@ class DocumentController extends Controller
 
     public function destroy(Request $request, Document $document)
     {
-        abort_unless($request->user()->tenant_id === $document->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($document->tenant_id), 403);
 
         Storage::disk('local')->delete($document->path);
         $document->delete();

@@ -66,7 +66,7 @@ class ShiftController extends Controller
     public function update(UpdateShiftRequest $request, Shift $shift)
     {
         abort_unless($request->user()->hasAnyRole(RosteringRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $shift->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($shift->tenant_id), 403);
 
         $this->assertNoConflict(
             $shift->tenant_id,

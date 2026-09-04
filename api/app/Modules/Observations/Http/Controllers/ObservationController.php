@@ -31,7 +31,7 @@ class ObservationController extends Controller
 
     public function store(StoreObservationRequest $request, ServiceUser $serviceUser)
     {
-        abort_unless($request->user()->tenant_id === $serviceUser->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
 
         $observation = $serviceUser->observations()->create([
             ...$request->validated(),

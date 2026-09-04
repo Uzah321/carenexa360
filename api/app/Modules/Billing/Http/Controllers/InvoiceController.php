@@ -36,7 +36,7 @@ class InvoiceController extends Controller
         abort_unless($request->user()->hasAnyRole(FinanceRoles::ALLOWED), 403);
 
         $serviceUser = ServiceUser::findOrFail($request->validated('service_user_id'));
-        abort_unless($request->user()->tenant_id === $serviceUser->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
 
         $rate = (float) $request->validated('hourly_rate');
 
@@ -106,7 +106,7 @@ class InvoiceController extends Controller
     public function update(UpdateInvoiceRequest $request, Invoice $invoice)
     {
         abort_unless($request->user()->hasAnyRole(FinanceRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $invoice->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($invoice->tenant_id), 403);
 
         $invoice->update($request->validated());
 

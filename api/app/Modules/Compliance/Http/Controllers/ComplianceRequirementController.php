@@ -60,7 +60,7 @@ class ComplianceRequirementController extends Controller
     public function update(UpdateComplianceRequirementRequest $request, ComplianceRequirement $complianceRequirement)
     {
         abort_unless($request->user()->hasAnyRole(ComplianceRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $complianceRequirement->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($complianceRequirement->tenant_id), 403);
 
         $complianceRequirement->update($request->validated());
 
@@ -70,7 +70,7 @@ class ComplianceRequirementController extends Controller
     public function destroy(Request $request, ComplianceRequirement $complianceRequirement)
     {
         abort_unless($request->user()->hasAnyRole(ComplianceRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $complianceRequirement->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($complianceRequirement->tenant_id), 403);
 
         $complianceRequirement->delete();
 

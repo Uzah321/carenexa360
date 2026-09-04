@@ -54,7 +54,7 @@ class SafeguardingCaseController extends Controller
     public function update(UpdateSafeguardingCaseRequest $request, SafeguardingCase $safeguardingCase)
     {
         abort_unless($request->user()->hasAnyRole(SafeguardingRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $safeguardingCase->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($safeguardingCase->tenant_id), 403);
 
         $safeguardingCase->update($request->validated());
 

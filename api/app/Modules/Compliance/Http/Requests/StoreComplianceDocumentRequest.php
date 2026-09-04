@@ -14,7 +14,7 @@ class StoreComplianceDocumentRequest extends FormRequest
         $complianceRequirement = $this->route('complianceRequirement');
 
         return $this->user()->hasAnyRole(ComplianceRoles::ALLOWED)
-            && $this->user()->tenant_id === $complianceRequirement->tenant_id;
+            && $this->user()->ownsTenant($complianceRequirement->tenant_id);
     }
 
     public function rules(): array

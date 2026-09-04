@@ -14,7 +14,7 @@ class StoreServiceUserContactRequest extends FormRequest
         /** @var ServiceUser $serviceUser */
         $serviceUser = $this->route('serviceUser');
 
-        return $this->user()->tenant_id === $serviceUser->tenant_id;
+        return $this->user()->ownsTenant($serviceUser->tenant_id);
     }
 
     public function rules(): array

@@ -12,7 +12,7 @@ class StoreStaffDocumentRequest extends FormRequest
         /** @var StaffProfile $staff */
         $staff = $this->route('staff');
 
-        return $this->user()->tenant_id === $staff->tenant_id;
+        return $this->user()->ownsTenant($staff->tenant_id);
     }
 
     public function rules(): array

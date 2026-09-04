@@ -27,7 +27,7 @@ class ClinicalAlertController extends Controller
 
     public function acknowledge(Request $request, ClinicalAlert $alert)
     {
-        abort_unless($request->user()->tenant_id === $alert->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($alert->tenant_id), 403);
 
         $alert->update([
             'acknowledged_at' => now(),

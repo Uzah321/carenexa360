@@ -79,7 +79,7 @@ class StaffController extends Controller
     public function update(UpdateStaffRequest $request, StaffProfile $staff)
     {
         abort_unless($request->user()->hasAnyRole(StaffRoles::ALLOWED), 403);
-        abort_unless($request->user()->tenant_id === $staff->tenant_id, 403);
+        abort_unless($request->user()->ownsTenant($staff->tenant_id), 403);
 
         $staff->update($request->validated());
 
