@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Organization\Models\Tenant;
 use App\Modules\ServiceUsers\Models\ServiceUser;
+use App\Modules\Tracking\Models\DutyPeriod;
 use App\Modules\Visits\Models\Visit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -28,6 +29,16 @@ class VisitCheckInTest extends TestCase
     {
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
         $carer = User::factory()->create(['tenant_id' => $tenant->id]);
+        // Visit check-in requires the carer to already be on duty (see
+        // VisitCheckInController::assertOnDuty) — open a duty period so these
+        // tests exercise the geofence logic rather than getting rejected earlier.
+        DutyPeriod::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $carer->id,
+            'started_at' => now()->subHour(),
+            'start_lat' => self::CLIENT_LAT,
+            'start_lng' => self::CLIENT_LNG,
+        ]);
         $serviceUser = ServiceUser::create([
             'tenant_id' => $tenant->id,
             'first_name' => 'John',
@@ -71,7 +82,7 @@ class VisitCheckInTest extends TestCase
             'accuracy' => 10,
         ]);
 
-        $response->assertUnprocessable();
+        $response->assertUnprocessable()->assertJsonValidationErrors('latitude');
         $this->assertNull($visit->fresh()->check_in_at);
     }
 
