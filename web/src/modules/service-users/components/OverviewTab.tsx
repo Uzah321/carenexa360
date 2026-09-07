@@ -7,6 +7,7 @@ import {
   CardHeader,
   DataTable,
   EmptyState,
+  FileUpload,
   FormField,
   Input,
   Modal,
@@ -16,6 +17,7 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { downloadDocument, useServiceUserDocuments, useUploadDocument } from "../../documents/api";
 import {
   useCreateServiceUserContact,
   useDeleteServiceUserContact,
@@ -25,6 +27,8 @@ import {
   type CreateContactInput,
 } from "../api";
 import { SERVICE_USER_CONTACT_TYPES, type ServiceUser, type ServiceUserContact } from "../../../lib/types";
+
+const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -49,6 +53,61 @@ function TagList({ label, items }: { label: string; items: string[] | undefined 
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function HospitalDocuments({ serviceUserId }: { serviceUserId: number }) {
+  const { data: documents, isLoading } = useServiceUserDocuments(serviceUserId);
+  const upload = useUploadDocument(serviceUserId);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const hospitalDocuments = (documents ?? []).filter((doc) => doc.category === HOSPITAL_RECORD_CATEGORY);
+
+  async function handleUpload() {
+    if (!pendingFile) return;
+    setError(null);
+    try {
+      await upload.mutateAsync({ file: pendingFile, category: HOSPITAL_RECORD_CATEGORY });
+      setPendingFile(null);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not upload this file. Please try again."));
+    }
+  }
+
+  return (
+    <div className="border-t border-line pt-3">
+      <div className="mb-1 text-sm text-inksoft">Discharge letters &amp; scans</div>
+      {error && (
+        <div className="mb-2">
+          <Alert tone="danger">{error}</Alert>
+        </div>
+      )}
+      {!isLoading && hospitalDocuments.length > 0 && (
+        <ul className="mb-3 space-y-1">
+          {hospitalDocuments.map((doc) => (
+            <li key={doc.id} className="flex items-center justify-between text-sm">
+              <span className="truncate text-ink">{doc.original_filename}</span>
+              <button
+                type="button"
+                className="ml-2 shrink-0 font-medium text-teal hover:text-teal/90"
+                onClick={() => downloadDocument(doc.id, doc.original_filename)}
+              >
+                Download
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1">
+          <FileUpload accept="application/pdf,image/*" onSelect={setPendingFile} />
+        </div>
+        <Button variant="secondary" onClick={handleUpload} disabled={!pendingFile} isLoading={upload.isPending}>
+          Upload
+        </Button>
+      </div>
     </div>
   );
 }
@@ -90,10 +149,11 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
             <InfoRow label="Hospital record number" value={serviceUser.hospital_record_number} />
             <InfoRow label="Discharge date" value={serviceUser.discharge_date} />
           </dl>
-          <div className="border-b border-line py-2 last:border-0">
+          <div className="border-b border-line py-2">
             <div className="mb-1 text-sm text-inksoft">Discharge summary</div>
             <p className="text-sm text-ink">{serviceUser.discharge_summary || "None recorded"}</p>
           </div>
+          <HospitalDocuments serviceUserId={serviceUser.id} />
         </CardBody>
       </Card>
 

@@ -21,22 +21,29 @@ export interface UploadDocumentInput {
   expiry_date?: string;
 }
 
+/** Unbound version of the upload, for the one place a document needs
+ * attaching to a service user that doesn't exist yet when the form opens —
+ * the New Service User modal creates the record first, then calls this
+ * directly with the id it got back, rather than going through a hook that
+ * has to know the id up front. */
+export async function uploadServiceUserDocument(serviceUserId: number, input: UploadDocumentInput) {
+  const formData = new FormData();
+  formData.append("file", input.file);
+  if (input.category) formData.append("category", input.category);
+  if (input.expiry_date) formData.append("expiry_date", input.expiry_date);
+
+  const { data } = await apiClient.post<{ data: CareDocument }>(
+    `/service-users/${serviceUserId}/documents`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return data.data;
+}
+
 export function useUploadDocument(serviceUserId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: UploadDocumentInput) => {
-      const formData = new FormData();
-      formData.append("file", input.file);
-      if (input.category) formData.append("category", input.category);
-      if (input.expiry_date) formData.append("expiry_date", input.expiry_date);
-
-      const { data } = await apiClient.post<{ data: CareDocument }>(
-        `/service-users/${serviceUserId}/documents`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-      return data.data;
-    },
+    mutationFn: (input: UploadDocumentInput) => uploadServiceUserDocument(serviceUserId, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "documents"] });
     },

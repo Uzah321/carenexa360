@@ -5,6 +5,7 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  FileUpload,
   FilterBar,
   FormField,
   Input,
@@ -18,6 +19,7 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { uploadServiceUserDocument } from "../../documents/api";
 import {
   useCreateServiceUser,
   useDeleteServiceUser,
@@ -27,6 +29,8 @@ import {
   type ServiceUserInput,
 } from "../api";
 import type { ServiceUser } from "../../../lib/types";
+
+const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
 
 const STATUS_TONE: Record<ServiceUser["status"], "success" | "warning" | "neutral"> = {
   active: "success",
@@ -79,6 +83,8 @@ export function ServiceUsersPage() {
   const createServiceUser = useCreateServiceUser();
   const [form, setForm] = useState<ServiceUserInput>(EMPTY_FORM);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingHospitalFile, setPendingHospitalFile] = useState<File | null>(null);
+  const [isAttachingFile, setIsAttachingFile] = useState(false);
 
   const [editingServiceUser, setEditingServiceUser] = useState<ServiceUser | null>(null);
   const [editForm, setEditForm] = useState<ServiceUserInput>(EMPTY_FORM);
@@ -93,13 +99,41 @@ export function ServiceUsersPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setCreateError(null);
+    let created: ServiceUser;
     try {
-      await createServiceUser.mutateAsync(form);
-      setIsCreateOpen(false);
-      setForm(EMPTY_FORM);
+      created = await createServiceUser.mutateAsync(form);
     } catch (err) {
       setCreateError(apiErrorMessage(err, "Could not create this service user. Please try again."));
+      return;
     }
+
+    // The service user is already saved at this point — a failure from here
+    // on is just the attachment, not the record itself, so it keeps the
+    // modal open with its own message rather than reporting the whole
+    // create as failed.
+    if (pendingHospitalFile) {
+      setIsAttachingFile(true);
+      try {
+        await uploadServiceUserDocument(created.id, {
+          file: pendingHospitalFile,
+          category: HOSPITAL_RECORD_CATEGORY,
+        });
+      } catch (err) {
+        setCreateError(
+          apiErrorMessage(
+            err,
+            `${created.first_name} ${created.last_name} was created, but the attached file failed to upload. You can attach it from their profile page instead.`,
+          ),
+        );
+        setIsAttachingFile(false);
+        return;
+      }
+      setIsAttachingFile(false);
+    }
+
+    setIsCreateOpen(false);
+    setForm(EMPTY_FORM);
+    setPendingHospitalFile(null);
   }
 
   function openEdit(serviceUser: ServiceUser) {
@@ -226,6 +260,7 @@ export function ServiceUsersPage() {
         onClose={() => {
           setIsCreateOpen(false);
           setCreateError(null);
+          setPendingHospitalFile(null);
         }}
         title="New Service User"
         footer={
@@ -233,7 +268,11 @@ export function ServiceUsersPage() {
             <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>
               Cancel
             </Button>
-            <Button form="create-service-user-form" type="submit" isLoading={createServiceUser.isPending}>
+            <Button
+              form="create-service-user-form"
+              type="submit"
+              isLoading={createServiceUser.isPending || isAttachingFile}
+            >
               Create
             </Button>
           </>
@@ -314,6 +353,10 @@ export function ServiceUsersPage() {
               onChange={(e) => setForm({ ...form, discharge_summary: e.target.value })}
             />
           </FormField>
+          <FormField label="Discharge letter or scan (optional)" htmlFor="hospital-file">
+            <FileUpload accept="application/pdf,image/*" onSelect={setPendingHospitalFile} />
+          </FormField>
+          <p className="-mt-3 text-xs text-inksoft">PDF or image (photo/scan) of the hospital discharge paperwork.</p>
         </form>
       </Modal>
 
