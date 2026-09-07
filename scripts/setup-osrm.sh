@@ -6,7 +6,10 @@
 # steps if their output already exists) but always re-runs partition +
 # customize since those are cheap relative to extract.
 #
-# Usage: scripts/setup-osrm.sh [geofabrik-.osm.pbf-url]
+# Usage: run from the same directory as docker-compose.yml —
+#   ./scripts/setup-osrm.sh [.osm.pbf-url]
+# (in production that's /opt/carenexa360, where this script gets copied
+# standalone rather than checked out as part of the repo).
 # Defaults to Zimbabwe — the region carer tracking actually operates in
 # today. Add another region by running this again with its URL; each
 # extract's .osrm files live side by side under osrm-data/, and
@@ -15,8 +18,12 @@
 set -euo pipefail
 
 REGION_URL="${1:-https://download.openstreetmap.fr/extracts/africa/zimbabwe-latest.osm.pbf}"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA_DIR="$REPO_ROOT/osrm-data"
+# Deliberately based on the current directory, not this script's own location
+# ($BASH_SOURCE) — docker-compose.yml's `./osrm-data` mount is relative to
+# wherever `docker compose` is run from, so this has to land in the same
+# place. Run this from the directory holding docker-compose.yml, same as
+# any other compose command.
+DATA_DIR="$(pwd)/osrm-data"
 PBF_NAME="$(basename "$REGION_URL")"
 BASE_NAME="${PBF_NAME%.osm.pbf}"
 
