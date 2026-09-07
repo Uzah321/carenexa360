@@ -35,6 +35,7 @@ class UpdateTenantRequest extends FormRequest
             'settings' => ['sometimes', 'array'],
             'settings.geofence_radius_meters' => ['sometimes', 'integer', 'min:10', 'max:2000'],
             'settings.training_expiry_warning_days' => ['sometimes', 'integer', 'min:1', 'max:180'],
+            'settings.session_timeout_minutes' => ['sometimes', 'nullable', 'integer', 'min:5', 'max:1440'],
         ];
     }
 }

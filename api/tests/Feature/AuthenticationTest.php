@@ -7,6 +7,7 @@ use App\Modules\Identity\Support\DefaultRoles;
 use App\Modules\Organization\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use PragmaRX\Google2FA\Google2FA;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -126,6 +127,78 @@ class AuthenticationTest extends TestCase
         $response->assertUnprocessable();
         $this->assertGuest();
         $this->assertDatabaseMissing('users', ['email' => 'jordan@riverside-care.test']);
+    }
+
+    public function test_login_requires_a_second_factor_when_two_factor_is_enabled(): void
+    {
+        $secret = (new Google2FA)->generateSecretKey();
+        User::factory()->create([
+            'tenant_id' => null,
+            'email' => 'admin@example.test',
+            'password' => 'password',
+            'mfa_secret' => $secret,
+            'mfa_enabled_at' => now(),
+        ]);
+
+        $response = $this->stateful()->postJson('/api/v1/auth/login', [
+            'email' => 'admin@example.test',
+            'password' => 'password',
+        ]);
+
+        $response->assertOk()->assertJsonPath('two_factor_required', true);
+        $this->assertGuest();
+    }
+
+    /**
+     * Doesn't chain a login call before this — per test_logout_clears_the_session
+     * below, Laravel's in-process test client doesn't carry session state
+     * across separate simulated requests the way a real browser does.
+     * withSession() seeds the pending-login marker directly instead, which
+     * is what a real second request would actually find server-side.
+     */
+    public function test_a_valid_code_completes_login_after_the_two_factor_challenge(): void
+    {
+        $secret = (new Google2FA)->generateSecretKey();
+        $user = User::factory()->create([
+            'tenant_id' => null,
+            'email' => 'admin@example.test',
+            'password' => 'password',
+            'mfa_secret' => $secret,
+            'mfa_enabled_at' => now(),
+        ]);
+
+        $code = (new Google2FA)->getCurrentOtp($secret);
+        $response = $this->stateful()
+            ->withSession(['mfa_pending_user_id' => $user->id])
+            ->postJson('/api/v1/auth/two-factor-challenge', ['code' => $code]);
+
+        $response->assertNoContent();
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_an_invalid_code_does_not_complete_the_two_factor_challenge(): void
+    {
+        $secret = (new Google2FA)->generateSecretKey();
+        $user = User::factory()->create([
+            'tenant_id' => null,
+            'email' => 'admin@example.test',
+            'password' => 'password',
+            'mfa_secret' => $secret,
+            'mfa_enabled_at' => now(),
+        ]);
+
+        $response = $this->stateful()
+            ->withSession(['mfa_pending_user_id' => $user->id])
+            ->postJson('/api/v1/auth/two-factor-challenge', ['code' => '000000']);
+
+        $response->assertUnprocessable();
+        $this->assertGuest();
+    }
+
+    public function test_the_two_factor_challenge_fails_without_a_prior_login_attempt(): void
+    {
+        $this->stateful()->postJson('/api/v1/auth/two-factor-challenge', ['code' => '123456'])
+            ->assertUnprocessable();
     }
 
     public function test_a_user_of_a_suspended_organization_cannot_log_in(): void

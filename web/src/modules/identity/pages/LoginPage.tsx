@@ -8,7 +8,7 @@ import { Logo } from "../../../design-system/Logo";
 import { CareTeamIllustration } from "../components/CareTeamIllustration";
 
 export function LoginPage() {
-  const { user, isLoading, login } = useAuth();
+  const { user, isLoading, login, submitTwoFactorCode } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -16,6 +16,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordHint, setForgotPasswordHint] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const [code, setCode] = useState("");
 
   if (!isLoading && user) {
     return <Navigate to={getDefaultRouteFor(user)} replace />;
@@ -26,9 +28,25 @@ export function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
+      const { twoFactorRequired } = await login(email, password);
+      if (twoFactorRequired) {
+        setNeedsTwoFactor(true);
+      }
     } catch {
       setError("Invalid email or password.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleTwoFactorSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await submitTwoFactorCode(code);
+    } catch {
+      setError("That code is incorrect or has expired — try the next one from your authenticator app.");
     } finally {
       setIsSubmitting(false);
     }
@@ -119,13 +137,60 @@ export function LoginPage() {
 
             <div className="mt-6 text-center">
               <h2 className="font-display text-2xl font-bold tracking-tight text-ink">
-                Welcome back
+                {needsTwoFactor ? "Enter your code" : "Welcome back"}
               </h2>
               <p className="mt-1.5 text-sm text-inksoft">
-                Sign in to access your care management dashboard
+                {needsTwoFactor
+                  ? "Open your authenticator app and enter the current 6-digit code."
+                  : "Sign in to access your care management dashboard"}
               </p>
             </div>
 
+            {needsTwoFactor ? (
+              <form onSubmit={handleTwoFactorSubmit} className="mt-7">
+                {error && (
+                  <div className="mb-4">
+                    <Alert tone="danger">{error}</Alert>
+                  </div>
+                )}
+
+                <label htmlFor="two-factor-code" className="mb-1.5 block text-sm font-medium text-ink">
+                  Authentication code
+                </label>
+                <div className="relative mb-5">
+                  <ShieldCheck className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-inksoft" />
+                  <input
+                    id="two-factor-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    autoFocus
+                    maxLength={6}
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full rounded-xl border border-line bg-white py-2.5 pr-3.5 pl-10 text-center text-lg tracking-[0.3em] text-ink placeholder:tracking-normal placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
+                  />
+                </div>
+
+                <Button type="submit" className="w-full" isLoading={isSubmitting} disabled={code.length !== 6}>
+                  Verify
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeedsTwoFactor(false);
+                    setCode("");
+                    setError(null);
+                  }}
+                  className="mt-4 w-full text-center text-sm font-medium text-teal hover:text-teal/80"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : (
             <form onSubmit={handleSubmit} className="mt-7">
               {error && (
                 <div className="mb-4">
@@ -211,6 +276,7 @@ export function LoginPage() {
                 </Link>
               </p>
             </form>
+            )}
 
             <div className="mt-6 flex items-center gap-3 text-xs text-inksoft">
               <span className="h-px flex-1 bg-line" />

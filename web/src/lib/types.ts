@@ -1,6 +1,8 @@
 export interface TenantSettings {
   geofence_radius_meters?: number;
   training_expiry_warning_days?: number;
+  /** Minutes of inactivity before a session is force-logged-out. Unset/null = no automatic timeout. */
+  session_timeout_minutes?: number | null;
 }
 
 export interface Tenant {
@@ -42,6 +44,7 @@ export interface User {
   name: string;
   email: string;
   status: "active" | "inactive";
+  mfa_enabled: boolean;
   roles: string[];
   permissions: string[];
 }

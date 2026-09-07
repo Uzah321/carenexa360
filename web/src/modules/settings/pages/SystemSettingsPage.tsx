@@ -386,6 +386,7 @@ function GeneralSettingsTab({ tenantId }: { tenantId: number }) {
   const updateTenant = useUpdateTenant(tenantId);
   const [geofence, setGeofence] = useState("100");
   const [trainingWindow, setTrainingWindow] = useState("30");
+  const [sessionTimeout, setSessionTimeout] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -393,6 +394,9 @@ function GeneralSettingsTab({ tenantId }: { tenantId: number }) {
     if (tenant) {
       setGeofence(String(tenant.settings.geofence_radius_meters ?? 100));
       setTrainingWindow(String(tenant.settings.training_expiry_warning_days ?? 30));
+      setSessionTimeout(
+        tenant.settings.session_timeout_minutes ? String(tenant.settings.session_timeout_minutes) : "",
+      );
     }
   }, [tenant]);
 
@@ -405,6 +409,7 @@ function GeneralSettingsTab({ tenantId }: { tenantId: number }) {
         settings: {
           geofence_radius_meters: Number(geofence),
           training_expiry_warning_days: Number(trainingWindow),
+          session_timeout_minutes: sessionTimeout ? Number(sessionTimeout) : null,
         },
       });
       setSaved(true);
@@ -465,6 +470,21 @@ function GeneralSettingsTab({ tenantId }: { tenantId: number }) {
           <p className="-mt-3 mb-4 text-xs text-inksoft">
             How many days before a training certificate expires it's flagged as "expiring soon" on Today, Reports,
             and the Operations Dashboard.
+          </p>
+          <FormField label="Session timeout (minutes)" htmlFor="session-timeout">
+            <Input
+              id="session-timeout"
+              type="number"
+              min={5}
+              max={1440}
+              placeholder="No automatic timeout"
+              value={sessionTimeout}
+              onChange={(e) => setSessionTimeout(e.target.value)}
+            />
+          </FormField>
+          <p className="-mt-3 mb-4 text-xs text-inksoft">
+            How long staff can be idle before they're automatically signed out. Leave blank for no automatic
+            timeout.
           </p>
           <Button type="submit" isLoading={updateTenant.isPending}>
             Save changes

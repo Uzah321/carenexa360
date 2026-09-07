@@ -15,6 +15,7 @@ use App\Modules\Documents\Http\Controllers\DocumentController;
 use App\Modules\Hr\Http\Controllers\LeaveRequestController;
 use App\Modules\Hr\Http\Controllers\StaffDocumentController;
 use App\Modules\Identity\Http\Controllers\AuthController;
+use App\Modules\Identity\Http\Controllers\TwoFactorController;
 use App\Modules\Identity\Http\Controllers\UserRoleController;
 use App\Modules\Incidents\Http\Controllers\IncidentController;
 use App\Modules\Marketing\Http\Controllers\DemoRequestController;
@@ -46,11 +47,18 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/two-factor-challenge', [AuthController::class, 'twoFactorChallenge']);
     Route::post('/demo-requests', [DemoRequestController::class, 'store']);
 
-    Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
+    Route::middleware(['auth:sanctum', 'tenant', 'session.timeout'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
+
+        Route::prefix('account/two-factor')->group(function () {
+            Route::post('/', [TwoFactorController::class, 'store']);
+            Route::post('/confirm', [TwoFactorController::class, 'confirm']);
+            Route::delete('/', [TwoFactorController::class, 'destroy']);
+        });
 
         // A Family Member login only ever reaches these — everything else in
         // this file lives inside the nested 'staff-only' group below, which

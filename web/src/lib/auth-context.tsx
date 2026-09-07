@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiClient, ensureCsrfCookie } from "./api-client";
+import { apiClient, ensureCsrfCookie, setSessionExpiredHandler } from "./api-client";
 import type { User } from "./types";
 
 export interface RegisterInput {
@@ -21,9 +21,13 @@ export interface RegisterInput {
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** Resolves to true when the account has 2FA enabled — the caller still owes a code via submitTwoFactorCode before the session is actually established. */
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>;
+  submitTwoFactorCode: (code: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-fetches /auth/me — call after anything that changes the current user's own record outside a page-level refetch, e.g. enabling/disabling 2FA. */
+  refreshUser: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
   hasAnyRole: (roles: readonly string[]) => boolean;
@@ -50,11 +54,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
   }, [loadUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    await ensureCsrfCookie();
-    await apiClient.post("/auth/login", { email, password });
-    await loadUser();
-  }, [loadUser]);
+  useEffect(() => {
+    setSessionExpiredHandler(() => setUser(null));
+    return () => setSessionExpiredHandler(() => {});
+  }, []);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      await ensureCsrfCookie();
+      const { data } = await apiClient.post<{ two_factor_required?: boolean }>("/auth/login", {
+        email,
+        password,
+      });
+      if (data?.two_factor_required) {
+        return { twoFactorRequired: true };
+      }
+      await loadUser();
+      return { twoFactorRequired: false };
+    },
+    [loadUser],
+  );
+
+  const submitTwoFactorCode = useCallback(
+    async (code: string) => {
+      await apiClient.post("/auth/two-factor-challenge", { code });
+      await loadUser();
+    },
+    [loadUser],
+  );
 
   const register = useCallback(async (input: RegisterInput) => {
     await ensureCsrfCookie();
@@ -89,7 +116,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, register, logout, hasPermission, hasRole, hasAnyRole }}
+      value={{
+        user,
+        isLoading,
+        login,
+        submitTwoFactorCode,
+        register,
+        logout,
+        refreshUser: loadUser,
+        hasPermission,
+        hasRole,
+        hasAnyRole,
+      }}
     >
       {children}
     </AuthContext.Provider>

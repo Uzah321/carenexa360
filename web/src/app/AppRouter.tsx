@@ -3,6 +3,7 @@ import { Providers } from "./Providers";
 import { DefaultRedirect, FamilyPortalRoute, HomeRoute, ProtectedRoute } from "./ProtectedRoute";
 import { LoginPage } from "../modules/identity/pages/LoginPage";
 import { RegisterPage } from "../modules/identity/pages/RegisterPage";
+import { MyAccountPage } from "../modules/account/pages/MyAccountPage";
 import { OrganizationsPage } from "../modules/organization/pages/OrganizationsPage";
 import { TenantDetailPage } from "../modules/organization/pages/TenantDetailPage";
 import { AuditLogPage } from "../modules/audit/pages/AuditLogPage";
@@ -51,6 +52,14 @@ function Routing() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <MyAccountPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/organizations"
         element={

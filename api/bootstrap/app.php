@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforceSessionTimeout;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\StaffOnly;
 use Illuminate\Auth\AuthenticationException;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => ResolveTenant::class,
             'staff-only' => StaffOnly::class,
+            'session.timeout' => EnforceSessionTimeout::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Identity\Http\Requests\LoginRequest;
 use App\Modules\Identity\Http\Requests\RegisterRequest;
+use App\Modules\Identity\Http\Requests\TwoFactorChallengeRequest;
 use App\Modules\Identity\Http\Resources\UserResource;
 use App\Modules\Identity\Support\DefaultRoles;
 use App\Modules\Organization\Models\Tenant;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use PragmaRX\Google2FA\Google2FA;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -99,6 +101,38 @@ class AuthController extends Controller
             ]);
         }
 
+        // A 2FA-enabled account doesn't get a session yet — Auth::attempt()
+        // above already established one, so undo that (without invalidating
+        // the session itself, unlike the suspended-tenant branch above: the
+        // pending marker below needs to survive into the next request) and
+        // wait for a verified code before this login actually completes.
+        if ($user->hasTwoFactorEnabled()) {
+            Auth::guard('web')->logout();
+            $request->session()->put('mfa_pending_user_id', $user->id);
+
+            return response()->json(['two_factor_required' => true]);
+        }
+
+        $request->session()->regenerate();
+
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        return response()->noContent();
+    }
+
+    public function twoFactorChallenge(TwoFactorChallengeRequest $request)
+    {
+        $userId = $request->session()->get('mfa_pending_user_id');
+        $user = $userId ? User::find($userId) : null;
+
+        if (! $user || ! $user->mfa_secret || ! (new Google2FA)->verifyKey($user->mfa_secret, $request->validated('code'))) {
+            throw ValidationException::withMessages([
+                'code' => ['That code is incorrect or has expired — try the next one from your authenticator app.'],
+            ]);
+        }
+
+        $request->session()->forget('mfa_pending_user_id');
+        Auth::login($user);
         $request->session()->regenerate();
 
         $user->forceFill(['last_login_at' => now()])->save();

@@ -9,12 +9,13 @@ import {
   LogOut,
   Menu,
   Settings,
+  UserCog,
   Users,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
 import {
   ADMINISTRATION_ROLES,
@@ -287,6 +288,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           >
             {initials}
           </span>
+          <Link
+            to="/account"
+            title="My Account"
+            aria-label="My Account"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-teal transition-colors duration-150 hover:bg-tealtint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          >
+            <UserCog className="h-4 w-4" aria-hidden />
+          </Link>
           <button
             type="button"
             onClick={() => void logout()}
@@ -310,13 +319,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <p className="truncate font-mono text-[10px] text-inksoft">{user?.roles[0] ?? user?.email}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="mt-3 text-sm font-medium text-teal transition-colors duration-150 hover:text-teal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
-        >
-          Sign out
-        </button>
+        <div className="mt-3 flex items-center gap-3">
+          <Link
+            to="/account"
+            className="text-sm font-medium text-teal transition-colors duration-150 hover:text-teal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          >
+            My Account
+          </Link>
+          <span className="text-line">·</span>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="text-sm font-medium text-teal transition-colors duration-150 hover:text-teal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+          >
+            Sign out
+          </button>
+        </div>
       </>
     );
   }
