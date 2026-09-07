@@ -9,10 +9,20 @@ import {
 import { apiClient, ensureCsrfCookie } from "./api-client";
 import type { User } from "./types";
 
+export interface RegisterInput {
+  organization_name: string;
+  country: string;
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+}
+
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
@@ -46,6 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadUser();
   }, [loadUser]);
 
+  const register = useCallback(async (input: RegisterInput) => {
+    await ensureCsrfCookie();
+    await apiClient.post("/auth/register", input);
+    await loadUser();
+  }, [loadUser]);
+
   const logout = useCallback(async () => {
     await apiClient.post("/auth/logout");
     setUser(null);
@@ -73,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, logout, hasPermission, hasRole, hasAnyRole }}
+      value={{ user, isLoading, login, register, logout, hasPermission, hasRole, hasAnyRole }}
     >
       {children}
     </AuthContext.Provider>

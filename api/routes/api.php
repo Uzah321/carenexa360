@@ -17,6 +17,7 @@ use App\Modules\Hr\Http\Controllers\StaffDocumentController;
 use App\Modules\Identity\Http\Controllers\AuthController;
 use App\Modules\Identity\Http\Controllers\UserRoleController;
 use App\Modules\Incidents\Http\Controllers\IncidentController;
+use App\Modules\Marketing\Http\Controllers\DemoRequestController;
 use App\Modules\Medications\Http\Controllers\MedicationAdministrationController;
 use App\Modules\Medications\Http\Controllers\MedicationController;
 use App\Modules\Observations\Http\Controllers\ClinicalAlertController;
@@ -44,6 +45,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/demo-requests', [DemoRequestController::class, 'store']);
 
     Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);

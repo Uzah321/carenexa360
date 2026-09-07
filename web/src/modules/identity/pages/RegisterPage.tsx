@@ -1,20 +1,34 @@
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff, Lock, Mail, Plus, ShieldCheck } from "lucide-react";
+import { Building2, Eye, EyeOff, Lock, Mail, Plus, ShieldCheck, User as UserIcon } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
-import { getDefaultRouteFor, useAuth } from "../../../lib/auth-context";
+import { getDefaultRouteFor, useAuth, type RegisterInput } from "../../../lib/auth-context";
 import { Button } from "../../../design-system";
 import { Alert } from "../../../design-system/Alert";
 import { Logo } from "../../../design-system/Logo";
 import { CareTeamIllustration } from "../components/CareTeamIllustration";
 
-export function LoginPage() {
-  const { user, isLoading, login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+function errorMessage(err: unknown): string {
+  const response = (err as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } })
+    .response;
+  const errors = response?.data?.errors;
+  if (errors) return Object.values(errors).flat().join(" ");
+  return response?.data?.message ?? "Something went wrong. Please try again.";
+}
+
+const INITIAL_FORM: RegisterInput = {
+  organization_name: "",
+  country: "",
+  name: "",
+  email: "",
+  password: "",
+  password_confirmation: "",
+};
+
+export function RegisterPage() {
+  const { user, isLoading, register } = useAuth();
+  const [form, setForm] = useState<RegisterInput>(INITIAL_FORM);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [forgotPasswordHint, setForgotPasswordHint] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isLoading && user) {
@@ -26,16 +40,16 @@ export function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
-    } catch {
-      setError("Invalid email or password.");
+      await register(form);
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="relative flex min-h-screen items-center overflow-hidden bg-paper">
+    <div className="relative flex min-h-screen items-center overflow-hidden bg-paper py-12">
       {/* Decorative background: corner patterns + bottom wave, all clipped to the viewport */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -81,7 +95,7 @@ export function LoginPage() {
         </svg>
       </div>
 
-      <div className="relative mx-auto grid w-full max-w-6xl gap-16 px-6 py-12 lg:grid-cols-2 lg:items-center">
+      <div className="relative mx-auto grid w-full max-w-6xl gap-16 px-6 lg:grid-cols-2 lg:items-center">
         <div className="hidden lg:block">
           <Link to="/" className="block w-fit">
             <Logo />
@@ -89,17 +103,17 @@ export function LoginPage() {
 
           <span className="mt-8 inline-flex w-fit items-center gap-1.5 rounded-full border border-teal/30 bg-tealtint px-3 py-1 text-xs font-semibold uppercase tracking-wide text-teal">
             <span className="h-1.5 w-1.5 rounded-full bg-teal" />
-            Care Management Platform
+            Multi-Tenant Care Management Platform
           </span>
 
           <h1 className="mt-6 max-w-md font-display text-4xl font-bold leading-[1.15] tracking-tight text-ink">
-            Connected care,
+            Set up your agency,
             <br />
-            simplified
+            in minutes
           </h1>
           <p className="mt-4 max-w-sm text-inksoft">
-            CareNexa360 empowers care teams to collaborate, coordinate, and deliver better
-            outcomes—every day.
+            No IT project, no lengthy rollout — create your organization and start scheduling
+            care today.
           </p>
 
           <CareTeamIllustration className="mt-10 w-full max-w-md" />
@@ -119,10 +133,10 @@ export function LoginPage() {
 
             <div className="mt-6 text-center">
               <h2 className="font-display text-2xl font-bold tracking-tight text-ink">
-                Welcome back
+                Create your account
               </h2>
               <p className="mt-1.5 text-sm text-inksoft">
-                Sign in to access your care management dashboard
+                Get started with CareNexa360 — free trial, no card required
               </p>
             </div>
 
@@ -133,8 +147,58 @@ export function LoginPage() {
                 </div>
               )}
 
+              <label htmlFor="organization_name" className="mb-1.5 block text-sm font-medium text-ink">
+                Organization name
+              </label>
+              <div className="relative mb-4">
+                <Building2 className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-inksoft" />
+                <input
+                  id="organization_name"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  placeholder="e.g. Riverside Home Care"
+                  value={form.organization_name}
+                  onChange={(e) => setForm({ ...form, organization_name: e.target.value })}
+                  className="w-full rounded-xl border border-line bg-white py-2.5 pr-3.5 pl-10 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
+              </div>
+
+              <label htmlFor="country" className="mb-1.5 block text-sm font-medium text-ink">
+                Country
+              </label>
+              <div className="relative mb-4">
+                <input
+                  id="country"
+                  type="text"
+                  autoComplete="country-name"
+                  required
+                  placeholder="e.g. United Kingdom"
+                  value={form.country}
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  className="w-full rounded-xl border border-line bg-white py-2.5 px-3.5 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
+              </div>
+
+              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-ink">
+                Your name
+              </label>
+              <div className="relative mb-4">
+                <UserIcon className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-inksoft" />
+                <input
+                  id="name"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  placeholder="Enter your full name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full rounded-xl border border-line bg-white py-2.5 pr-3.5 pl-10 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
+              </div>
+
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink">
-                Email
+                Work email
               </label>
               <div className="relative mb-4">
                 <Mail className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-inksoft" />
@@ -143,9 +207,9 @@ export function LoginPage() {
                   type="email"
                   autoComplete="username"
                   required
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your work email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
                   className="w-full rounded-xl border border-line bg-white py-2.5 pr-3.5 pl-10 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
                 />
               </div>
@@ -158,11 +222,12 @@ export function LoginPage() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="w-full rounded-xl border border-line bg-white py-2.5 pr-10 pl-10 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
                 />
                 <button
@@ -175,39 +240,32 @@ export function LoginPage() {
                 </button>
               </div>
 
-              <div className="mb-5 flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 text-ink">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-line text-teal focus:ring-2 focus:ring-teal/30"
-                  />
-                  Remember me
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setForgotPasswordHint(true)}
-                  className="font-medium text-teal hover:text-teal/80"
-                >
-                  Forgot password?
-                </button>
+              <label htmlFor="password_confirmation" className="mb-1.5 block text-sm font-medium text-ink">
+                Confirm password
+              </label>
+              <div className="relative mb-5">
+                <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-inksoft" />
+                <input
+                  id="password_confirmation"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  placeholder="Re-enter your password"
+                  value={form.password_confirmation}
+                  onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })}
+                  className="w-full rounded-xl border border-line bg-white py-2.5 pr-3.5 pl-10 text-sm text-ink placeholder:text-inksoft/70 focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
               </div>
 
-              {forgotPasswordHint && (
-                <p className="mb-4 -mt-2 text-xs text-inksoft">
-                  Contact your organization administrator to reset your password.
-                </p>
-              )}
-
               <Button type="submit" className="w-full" isLoading={isSubmitting}>
-                Sign in
+                Create account
               </Button>
 
               <p className="mt-4 text-center text-sm text-inksoft">
-                Don't have an account?{" "}
-                <Link to="/register" className="font-medium text-teal hover:text-teal/80">
-                  Create one
+                Already have an account?{" "}
+                <Link to="/login" className="font-medium text-teal hover:text-teal/80">
+                  Sign in
                 </Link>
               </p>
             </form>
@@ -216,7 +274,7 @@ export function LoginPage() {
               <span className="h-px flex-1 bg-line" />
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                 <ShieldCheck className="h-3.5 w-3.5 text-teal" />
-                Secure access for authorized staff only
+                Your data stays isolated to your organization
               </span>
               <span className="h-px flex-1 bg-line" />
             </div>

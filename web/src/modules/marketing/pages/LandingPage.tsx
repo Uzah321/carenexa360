@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Calendar,
   ClipboardList,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Logo } from "../../../design-system/Logo";
+import { DemoRequestModal } from "../components/DemoRequestModal";
 
 const NAV_LINKS = [
   { href: "#modules", label: "Modules" },
@@ -101,6 +103,8 @@ const SECONDARY_LINK =
   "inline-flex items-center justify-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-ink shadow-sm ring-1 ring-inset ring-line transition-colors duration-150 hover:bg-paper active:scale-[0.98]";
 
 export function LandingPage() {
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-paper">
       <header className="sticky top-0 z-20 border-b border-line bg-white/80 backdrop-blur">
@@ -118,10 +122,17 @@ export function LandingPage() {
             ))}
           </nav>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsDemoModalOpen(true)}
+              className="hidden text-sm font-semibold text-ink hover:text-teal sm:inline-block"
+            >
+              Request a Demo
+            </button>
             <Link to="/login" className="text-sm font-semibold text-ink hover:text-teal">
               Log In
             </Link>
-            <Link to="/login" className={PRIMARY_LINK}>
+            <Link to="/register" className={PRIMARY_LINK}>
               Get Started
             </Link>
           </div>
@@ -159,9 +170,12 @@ export function LandingPage() {
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Link to="/login" className={PRIMARY_LINK}>
-                  Sign In →
+                <Link to="/register" className={PRIMARY_LINK}>
+                  Get Started →
                 </Link>
+                <button type="button" onClick={() => setIsDemoModalOpen(true)} className={SECONDARY_LINK}>
+                  Request a Demo
+                </button>
                 <a
                   href="#how-it-works"
                   className="text-sm font-semibold text-ink hover:text-teal"
@@ -272,14 +286,23 @@ export function LandingPage() {
               From the visit on the ground to the trend on the owner's dashboard — CareNexa360
               keeps every branch, every carer, and every family in sync.
             </p>
-            <div className="mt-8">
-              <Link to="/login" className={SECONDARY_LINK}>
-                Sign In →
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+              <Link to="/register" className={SECONDARY_LINK}>
+                Get Started →
               </Link>
+              <button
+                type="button"
+                onClick={() => setIsDemoModalOpen(true)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/30 transition-colors duration-150 hover:bg-white/10 active:scale-[0.98]"
+              >
+                Request a Demo
+              </button>
             </div>
           </div>
         </section>
       </main>
+
+      <DemoRequestModal isOpen={isDemoModalOpen} onClose={() => setIsDemoModalOpen(false)} />
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">

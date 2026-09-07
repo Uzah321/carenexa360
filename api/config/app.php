@@ -69,6 +69,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Demo Request Notifications
+    |--------------------------------------------------------------------------
+    |
+    | Where the marketing site's "Request a Demo" form notifies. Falls back
+    | to the app's own from-address so this works out of the box even before
+    | a real sales inbox is configured.
+    |
+    */
+
+    'demo_requests_email' => env('DEMO_REQUESTS_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

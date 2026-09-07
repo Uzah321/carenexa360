@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import { Providers } from "./Providers";
 import { DefaultRedirect, FamilyPortalRoute, HomeRoute, ProtectedRoute } from "./ProtectedRoute";
 import { LoginPage } from "../modules/identity/pages/LoginPage";
+import { RegisterPage } from "../modules/identity/pages/RegisterPage";
 import { OrganizationsPage } from "../modules/organization/pages/OrganizationsPage";
 import { TenantDetailPage } from "../modules/organization/pages/TenantDetailPage";
 import { AuditLogPage } from "../modules/audit/pages/AuditLogPage";
@@ -49,6 +50,7 @@ function Routing() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         path="/organizations"
         element={

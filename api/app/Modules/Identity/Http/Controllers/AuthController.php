@@ -3,14 +3,78 @@
 namespace App\Modules\Identity\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Identity\Http\Requests\LoginRequest;
+use App\Modules\Identity\Http\Requests\RegisterRequest;
 use App\Modules\Identity\Http\Resources\UserResource;
+use App\Modules\Identity\Support\DefaultRoles;
+use App\Modules\Organization\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class AuthController extends Controller
 {
+    /**
+     * Self-service sign-up from the marketing site's "Get Started" flow —
+     * creates a brand-new tenant (on a trial plan) plus its first user, who
+     * becomes that tenant's Organization Owner. TenantObserver seeds the
+     * tenant's roles as soon as it's created, so "Organization Owner"
+     * already exists by the time assignRole() below runs.
+     */
+    public function register(RegisterRequest $request)
+    {
+        $tenant = Tenant::create([
+            'name' => $request->validated('organization_name'),
+            'slug' => $this->uniqueSlug($request->validated('organization_name')),
+            'country' => $request->validated('country'),
+            'timezone' => 'UTC',
+            'currency' => 'GBP',
+            'locale' => 'en',
+            'status' => 'trial',
+        ]);
+
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => $request->validated('name'),
+            'email' => $request->validated('email'),
+            'password' => $request->validated('password'),
+        ]);
+
+        // No 'tenant' middleware has run for this request (it's public, and
+        // there was no tenant to resolve until the line above), so the
+        // ambient Spatie team context is still unset — set it explicitly or
+        // assignRole() would file the role under the wrong team.
+        app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+        $role = Role::where('name', DefaultRoles::TENANT_ROLES[0])
+            ->where('tenant_id', $tenant->id)
+            ->firstOrFail();
+        $user->assignRole($role);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $user->forceFill(['last_login_at' => now()])->save();
+
+        return response()->noContent();
+    }
+
+    private function uniqueSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'organization';
+        $slug = $base;
+        $suffix = 1;
+
+        while (Tenant::where('slug', $slug)->exists()) {
+            $suffix++;
+            $slug = "{$base}-{$suffix}";
+        }
+
+        return $slug;
+    }
+
     public function login(LoginRequest $request)
     {
         $credentials = $request->validated();

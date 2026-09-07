@@ -54,6 +54,80 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_a_visitor_can_register_a_new_organization(): void
+    {
+        $response = $this->stateful()->postJson('/api/v1/auth/register', [
+            'organization_name' => 'Riverside Home Care',
+            'country' => 'United Kingdom',
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertNoContent();
+
+        $tenant = Tenant::where('slug', 'riverside-home-care')->firstOrFail();
+        $this->assertSame('trial', $tenant->status);
+
+        $user = User::where('email', 'jordan@riverside-care.test')->firstOrFail();
+        $this->assertSame($tenant->id, $user->tenant_id);
+        $this->assertAuthenticatedAs($user);
+
+        app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+        $this->assertTrue($user->fresh()->hasRole('Organization Owner'));
+    }
+
+    public function test_register_gives_two_organizations_with_the_same_name_different_slugs(): void
+    {
+        Tenant::create(['name' => 'Riverside Home Care', 'slug' => 'riverside-home-care', 'country' => 'United Kingdom']);
+
+        $response = $this->stateful()->postJson('/api/v1/auth/register', [
+            'organization_name' => 'Riverside Home Care',
+            'country' => 'United Kingdom',
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertNoContent();
+        $this->assertDatabaseHas('tenants', ['slug' => 'riverside-home-care-2']);
+    }
+
+    public function test_register_fails_when_the_email_is_already_in_use(): void
+    {
+        User::factory()->create(['tenant_id' => null, 'email' => 'jordan@riverside-care.test']);
+
+        $response = $this->stateful()->postJson('/api/v1/auth/register', [
+            'organization_name' => 'Riverside Home Care',
+            'country' => 'United Kingdom',
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertUnprocessable();
+        $this->assertGuest();
+    }
+
+    public function test_register_fails_when_the_password_confirmation_does_not_match(): void
+    {
+        $response = $this->stateful()->postJson('/api/v1/auth/register', [
+            'organization_name' => 'Riverside Home Care',
+            'country' => 'United Kingdom',
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'password' => 'password123',
+            'password_confirmation' => 'not-the-same',
+        ]);
+
+        $response->assertUnprocessable();
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'jordan@riverside-care.test']);
+    }
+
     public function test_a_user_of_a_suspended_organization_cannot_log_in(): void
     {
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe', 'status' => 'suspended']);
