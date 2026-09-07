@@ -42,6 +42,10 @@ class ServiceUserResource extends JsonResource
             'behavioural_considerations' => $this->behavioural_considerations,
             'preferred_routines' => $this->preferred_routines,
             'capacity_consent_notes' => $this->capacity_consent_notes,
+            'referring_hospital' => $this->referring_hospital,
+            'hospital_record_number' => $this->hospital_record_number,
+            'discharge_date' => $this->discharge_date?->toDateString(),
+            'discharge_summary' => $this->discharge_summary,
             'carers' => $this->whenLoaded('carers', fn () => $this->carers->map(fn ($carer) => [
                 'id' => $carer->id,
                 'name' => $carer->name,

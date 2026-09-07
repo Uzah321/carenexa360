@@ -36,6 +36,30 @@ class ServiceUserTest extends TestCase
             ->assertJsonPath('data.last_name', 'Smith');
     }
 
+    public function test_a_service_user_can_be_created_with_hospital_records(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+
+        $response = $this->actingAs($user)->postJson('/api/v1/service-users', [
+            'first_name' => 'John',
+            'last_name' => 'Smith',
+            'referring_hospital' => 'Parirenyatwa Group of Hospitals',
+            'hospital_record_number' => 'PGH-00123',
+            'discharge_date' => '2026-09-01',
+            'discharge_summary' => 'Discharged post-hip-fracture surgery; needs mobility support and pain review.',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.referring_hospital', 'Parirenyatwa Group of Hospitals')
+            ->assertJsonPath('data.hospital_record_number', 'PGH-00123')
+            ->assertJsonPath('data.discharge_date', '2026-09-01')
+            ->assertJsonPath(
+                'data.discharge_summary',
+                'Discharged post-hip-fracture surgery; needs mobility support and pain review.',
+            );
+    }
+
     public function test_platform_admin_cannot_create_a_service_user(): void
     {
         $admin = User::factory()->create(['tenant_id' => null]);

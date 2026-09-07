@@ -83,6 +83,21 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
       </Card>
 
       <Card>
+        <CardHeader>Hospital Records</CardHeader>
+        <CardBody>
+          <dl>
+            <InfoRow label="Referring hospital" value={serviceUser.referring_hospital} />
+            <InfoRow label="Hospital record number" value={serviceUser.hospital_record_number} />
+            <InfoRow label="Discharge date" value={serviceUser.discharge_date} />
+          </dl>
+          <div className="border-b border-line py-2 last:border-0">
+            <div className="mb-1 text-sm text-inksoft">Discharge summary</div>
+            <p className="text-sm text-ink">{serviceUser.discharge_summary || "None recorded"}</p>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
         <CardHeader>Care Notes</CardHeader>
         <CardBody>
           <dl>

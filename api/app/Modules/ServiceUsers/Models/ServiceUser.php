@@ -57,6 +57,10 @@ class ServiceUser extends Model
         'behavioural_considerations',
         'preferred_routines',
         'capacity_consent_notes',
+        'referring_hospital',
+        'hospital_record_number',
+        'discharge_date',
+        'discharge_summary',
     ];
 
     protected function casts(): array
@@ -69,6 +73,7 @@ class ServiceUser extends Model
             'diagnoses' => 'array',
             'medical_conditions' => 'array',
             'disabilities' => 'array',
+            'discharge_date' => 'date',
         ];
     }
 

@@ -14,6 +14,7 @@ import {
   RowActionsMenu,
   Select,
   StatusBadge,
+  Textarea,
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
@@ -38,6 +39,10 @@ const EMPTY_FORM: ServiceUserInput = {
   last_name: "",
   preferred_name: "",
   date_of_birth: "",
+  referring_hospital: "",
+  hospital_record_number: "",
+  discharge_date: "",
+  discharge_summary: "",
 };
 
 function serviceUserToForm(serviceUser: ServiceUser): ServiceUserInput {
@@ -51,6 +56,10 @@ function serviceUserToForm(serviceUser: ServiceUser): ServiceUserInput {
     address: serviceUser.address ?? "",
     funding_source: serviceUser.funding_source ?? "",
     status: serviceUser.status,
+    referring_hospital: serviceUser.referring_hospital ?? "",
+    hospital_record_number: serviceUser.hospital_record_number ?? "",
+    discharge_date: serviceUser.discharge_date ?? "",
+    discharge_summary: serviceUser.discharge_summary ?? "",
   };
 }
 
@@ -267,6 +276,44 @@ export function ServiceUsersPage() {
               onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
             />
           </FormField>
+
+          <h3 className="mb-2 mt-5 text-sm font-semibold text-ink">Hospital Records</h3>
+          <p className="mb-3 text-xs text-inksoft">
+            Where they're coming from, so care can pick up from the right starting point.
+          </p>
+          <FormField label="Referring hospital" htmlFor="referring_hospital">
+            <Input
+              id="referring_hospital"
+              value={form.referring_hospital ?? ""}
+              onChange={(e) => setForm({ ...form, referring_hospital: e.target.value })}
+            />
+          </FormField>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Hospital record number" htmlFor="hospital_record_number">
+              <Input
+                id="hospital_record_number"
+                value={form.hospital_record_number ?? ""}
+                onChange={(e) => setForm({ ...form, hospital_record_number: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Discharge date" htmlFor="discharge_date">
+              <Input
+                id="discharge_date"
+                type="date"
+                value={form.discharge_date ?? ""}
+                onChange={(e) => setForm({ ...form, discharge_date: e.target.value })}
+              />
+            </FormField>
+          </div>
+          <FormField label="Discharge summary" htmlFor="discharge_summary">
+            <Textarea
+              id="discharge_summary"
+              rows={3}
+              placeholder="Diagnosis, treatment, and condition at discharge — what the care team should know before the first visit."
+              value={form.discharge_summary ?? ""}
+              onChange={(e) => setForm({ ...form, discharge_summary: e.target.value })}
+            />
+          </FormField>
         </form>
       </Modal>
 
@@ -367,6 +414,40 @@ export function ServiceUsersPage() {
               <option value="inactive">Inactive</option>
               <option value="discharged">Discharged</option>
             </Select>
+          </FormField>
+
+          <h3 className="mb-2 mt-5 text-sm font-semibold text-ink">Hospital Records</h3>
+          <FormField label="Referring hospital" htmlFor="edit-referring-hospital">
+            <Input
+              id="edit-referring-hospital"
+              value={editForm.referring_hospital ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, referring_hospital: e.target.value })}
+            />
+          </FormField>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Hospital record number" htmlFor="edit-hospital-record-number">
+              <Input
+                id="edit-hospital-record-number"
+                value={editForm.hospital_record_number ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, hospital_record_number: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Discharge date" htmlFor="edit-discharge-date">
+              <Input
+                id="edit-discharge-date"
+                type="date"
+                value={editForm.discharge_date ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, discharge_date: e.target.value })}
+              />
+            </FormField>
+          </div>
+          <FormField label="Discharge summary" htmlFor="edit-discharge-summary">
+            <Textarea
+              id="edit-discharge-summary"
+              rows={3}
+              value={editForm.discharge_summary ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, discharge_summary: e.target.value })}
+            />
           </FormField>
         </form>
       </Modal>

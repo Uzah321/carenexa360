@@ -30,6 +30,10 @@ export interface ServiceUserInput {
   behavioural_considerations?: string | null;
   preferred_routines?: string | null;
   capacity_consent_notes?: string | null;
+  referring_hospital?: string | null;
+  hospital_record_number?: string | null;
+  discharge_date?: string | null;
+  discharge_summary?: string | null;
 }
 
 export interface ServiceUserFilters {

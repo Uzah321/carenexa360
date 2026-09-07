@@ -54,6 +54,10 @@ class StoreServiceUserRequest extends FormRequest
             'behavioural_considerations' => ['nullable', 'string'],
             'preferred_routines' => ['nullable', 'string'],
             'capacity_consent_notes' => ['nullable', 'string'],
+            'referring_hospital' => ['nullable', 'string', 'max:255'],
+            'hospital_record_number' => ['nullable', 'string', 'max:255'],
+            'discharge_date' => ['nullable', 'date'],
+            'discharge_summary' => ['nullable', 'string'],
         ];
     }
 }
