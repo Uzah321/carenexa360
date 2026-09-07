@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Tracking\Http\Requests\StoreCarerLocationRequest;
 use App\Modules\Tracking\Models\CarerLocation;
 use App\Modules\Tracking\Models\DutyPeriod;
+use App\Modules\Tracking\Support\RoadSnapper;
 use App\Modules\Tracking\Support\TrackingRoles;
 use App\Modules\Visits\Models\Visit;
 use App\Support\Time\TenantClock;
@@ -118,6 +119,12 @@ class CarerLocationController extends Controller
                 'is_checked_in' => $onDuty,
                 'last_ping_at' => $trail->last()['recorded_at'] ?? null,
                 'trail' => $trail,
+                // Road-following version of the same points, for the map line —
+                // falls back to the raw trail (shape-matched, sans recorded_at)
+                // whenever OSRM can't snap it: down, unreachable, or a ping
+                // outside the loaded map region.
+                'route' => RoadSnapper::snap($trail->all())
+                    ?? $trail->map(fn (array $p) => ['latitude' => $p['latitude'], 'longitude' => $p['longitude']])->all(),
             ];
         }
 

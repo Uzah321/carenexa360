@@ -11,6 +11,7 @@ use App\Modules\Tracking\Models\CarerLocation;
 use App\Modules\Tracking\Models\DutyPeriod;
 use App\Modules\Visits\Models\Visit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -58,6 +59,13 @@ class CarerLocationTest extends TestCase
 
     public function test_live_map_reports_checked_in_and_checked_out_carers_with_their_trail(): void
     {
+        Http::fake([
+            '*/route/v1/driving/*' => Http::response([
+                'code' => 'Ok',
+                'routes' => [['geometry' => ['coordinates' => [[31.04, -17.82], [31.041, -17.821]]]]],
+            ]),
+        ]);
+
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
         $manager = $this->makeManager($tenant);
 
@@ -136,6 +144,52 @@ class CarerLocationTest extends TestCase
         $carerAPayload = collect($response->json('carers'))->firstWhere('user_id', $carerA->id);
         $this->assertTrue($carerAPayload['is_checked_in']);
         $this->assertCount(2, $carerAPayload['trail']);
+        $this->assertSame([
+            ['latitude' => -17.82, 'longitude' => 31.04],
+            ['latitude' => -17.821, 'longitude' => 31.041],
+        ], $carerAPayload['route']);
+    }
+
+    public function test_live_map_falls_back_to_the_raw_trail_when_osrm_is_unreachable(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('connection refused'));
+
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeManager($tenant);
+        $carer = User::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Carer A']);
+
+        DutyPeriod::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $carer->id,
+            'started_at' => now()->subHour(),
+            'start_lat' => -17.8292,
+            'start_lng' => 31.0522,
+        ]);
+        CarerLocation::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $carer->id,
+            'latitude' => -17.8200,
+            'longitude' => 31.0400,
+            'recorded_at' => now()->subMinutes(15),
+        ]);
+        CarerLocation::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $carer->id,
+            'latitude' => -17.8210,
+            'longitude' => 31.0410,
+            'recorded_at' => now()->subMinutes(5),
+        ]);
+
+        $response = $this->actingAs($manager)->getJson('/api/v1/carer-locations/live');
+
+        $response->assertOk();
+        $carerPayload = collect($response->json('carers'))->firstWhere('user_id', $carer->id);
+        $this->assertSame(
+            collect($carerPayload['trail'])
+                ->map(fn (array $p) => ['latitude' => $p['latitude'], 'longitude' => $p['longitude']])
+                ->all(),
+            $carerPayload['route'],
+        );
     }
 
     public function test_live_map_can_be_filtered_by_branch(): void

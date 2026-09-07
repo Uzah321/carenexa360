@@ -220,7 +220,11 @@ export function LiveMapPage() {
             const focused = carer.user_id === focusedCarerId;
             return (
               <Fragment key={carer.user_id}>
-                <Polyline positions={carer.trail.map((p) => [p.latitude, p.longitude])} color={color} weight={4} />
+                <Polyline
+                  positions={(carer.route.length > 0 ? carer.route : carer.trail).map((p) => [p.latitude, p.longitude])}
+                  color={color}
+                  weight={4}
+                />
                 {lastPoint && (
                   <Marker
                     ref={(instance) => {

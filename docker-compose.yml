@@ -21,6 +21,19 @@ services:
     volumes:
       - carenexa360-redis-data:/data
 
+  # Road-snapping for the Live Map's carer trails. Data files are prepared by
+  # scripts/setup-osrm.sh (not part of the image) — run that first. Internal
+  # only: nothing outside this host needs to reach it directly.
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend
+    container_name: carenexa360-osrm
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld --max-matching-size 100 /data/${OSRM_REGION_FILE:-zimbabwe-latest.osrm}
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - ./osrm-data:/data
+
 volumes:
   carenexa360-postgres-data:
   carenexa360-redis-data:

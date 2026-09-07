@@ -28,6 +28,8 @@ export interface LiveMapCarer {
   is_checked_in: boolean;
   last_ping_at: string | null;
   trail: LiveMapPing[];
+  /** trail's points snapped to roads (falls back to the raw trail server-side if that fails) — draw this, not trail, for the map line. */
+  route: { latitude: number; longitude: number }[];
 }
 
 export interface LiveMapPerson {
