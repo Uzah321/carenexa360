@@ -105,14 +105,27 @@ deploy_api() {
   echo "==> composer install (on the server, so it matches its PHP/extensions)"
   remote "cd '$REMOTE_BASE/api.new' && composer install --no-dev --optimize-autoloader --no-interaction"
 
-  echo "==> Migrating and warming caches"
-  remote "cd '$REMOTE_BASE/api.new' && php artisan storage:link || true"
+  # Migrating here (still at api.new, not yet live) means a bad migration
+  # aborts the whole deploy — the old code keeps serving off the old schema
+  # instead of a broken migration going live.
+  echo "==> Migrating"
   remote "cd '$REMOTE_BASE/api.new' && php artisan migrate --force"
-  remote "cd '$REMOTE_BASE/api.new' && php artisan config:cache && php artisan route:cache && php artisan view:cache"
-  remote "chown -R www-data:www-data '$REMOTE_BASE/api.new'"
 
   echo "==> Swapping in new api"
   remote "mv '$REMOTE_BASE/api' '$REMOTE_BASE/api.replaced-$TS' && mv '$REMOTE_BASE/api.new' '$REMOTE_BASE/api'"
+
+  # Only now, from the api/ path this release will actually run at —
+  # config:cache/route:cache bake resolved absolute paths (e.g. config/view.php's
+  # realpath(storage_path(...))) into bootstrap/cache/*.php. Caching them while
+  # still at api.new left the health-check view (and anything else touching
+  # those cached paths) pointing at a directory that stopped existing the
+  # moment the mv above ran — that's what took prod's /up down on the first
+  # real deploy through this script.
+  echo "==> Warming caches"
+  remote "cd '$REMOTE_BASE/api' && php artisan storage:link || true"
+  remote "cd '$REMOTE_BASE/api' && php artisan config:cache && php artisan route:cache && php artisan view:cache"
+  remote "chown -R www-data:www-data '$REMOTE_BASE/api'"
+
   remote "systemctl reload $PHP_FPM_SERVICE"
   prune_backups api
 
