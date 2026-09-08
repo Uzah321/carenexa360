@@ -129,7 +129,13 @@ deploy_api() {
   remote "systemctl reload $PHP_FPM_SERVICE"
   prune_backups api
 
-  remote "echo \"$(date -u +%FT%TZ)  $(git -C "$REPO_ROOT" rev-parse --short HEAD)  $(git -C "$REPO_ROOT" log -1 --format=%s)\" >> '$REMOTE_BASE/DEPLOY_LOG'"
+  # Built locally and sent over stdin rather than interpolated into a
+  # remote-quoted string — a commit subject containing a quote character
+  # (e.g. an em dash sentence with "quoted words") would otherwise break the
+  # remote shell's parsing and fail the deploy at this last, non-critical
+  # step, same as the "Give demo requesters..." commit that caught this.
+  deploy_log_line="$(date -u +%FT%TZ)  $(git -C "$REPO_ROOT" rev-parse --short HEAD)  $(git -C "$REPO_ROOT" log -1 --format=%s)"
+  printf '%s\n' "$deploy_log_line" | remote "cat >> '$REMOTE_BASE/DEPLOY_LOG'"
 }
 
 health_check() {
