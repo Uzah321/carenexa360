@@ -60,9 +60,9 @@ class CarerLocationTest extends TestCase
     public function test_live_map_reports_checked_in_and_checked_out_carers_with_their_trail(): void
     {
         Http::fake([
-            '*/route/v1/driving/*' => Http::response([
+            '*/match/v1/driving/*' => Http::response([
                 'code' => 'Ok',
-                'routes' => [['geometry' => ['coordinates' => [[31.04, -17.82], [31.041, -17.821]]]]],
+                'matchings' => [['geometry' => ['coordinates' => [[31.04, -17.82], [31.041, -17.821]]]]],
             ]),
         ]);
 

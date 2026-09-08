@@ -91,6 +91,7 @@ class CarerLocationController extends Controller
                 ->map(fn (CarerLocation $ping) => [
                     'latitude' => (float) $ping->latitude,
                     'longitude' => (float) $ping->longitude,
+                    'accuracy' => $ping->accuracy !== null ? (float) $ping->accuracy : null,
                     'recorded_at' => $ping->recorded_at,
                 ])
                 ->values();
