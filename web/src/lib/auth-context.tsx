@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { apiClient, ensureCsrfCookie, setSessionExpiredHandler } from "./api-client";
+import { queryClient } from "./query-client";
 import type { User } from "./types";
 
 export interface RegisterInput {
@@ -55,7 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser]);
 
   useEffect(() => {
-    setSessionExpiredHandler(() => setUser(null));
+    // A cached query answers "whose data is this" purely by queryKey, not by
+    // which user fetched it — so anything already in cache (duty period,
+    // visits, whatever) would otherwise keep rendering under the next
+    // person's session on this tab until each query happened to go stale
+    // and refetch on its own. Wiping the cache at the account boundary is
+    // what makes "logged in as" actually mean something between sessions.
+    setSessionExpiredHandler(() => {
+      queryClient.clear();
+      setUser(null);
+    });
     return () => setSessionExpiredHandler(() => {});
   }, []);
 
@@ -91,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await apiClient.post("/auth/logout");
+    queryClient.clear();
     setUser(null);
   }, []);
 
