@@ -122,18 +122,8 @@ export function LandingPage() {
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsDemoModalOpen(true)}
-              className="hidden text-sm font-semibold text-ink hover:text-teal sm:inline-block"
-            >
-              Request a Demo
-            </button>
             <Link to="/login" className="text-sm font-semibold text-ink hover:text-teal">
               Log In
-            </Link>
-            <Link to="/register" className={PRIMARY_LINK}>
-              Get Started
             </Link>
           </div>
         </div>
