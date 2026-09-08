@@ -1,6 +1,5 @@
-import { DivIcon, type Marker as LeafletMarker } from "leaflet";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from "@react-google-maps/api";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Alert, Card, PageHeader, Select } from "../../../design-system";
 import { useAuth } from "../../../lib/auth-context";
@@ -23,29 +22,31 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-// Cached per (color, label, focused) so a 20s data refresh doesn't hand
-// react-leaflet a brand-new DivIcon identity for markers that haven't
-// actually changed — that was making it call marker.setIcon() on every poll,
-// which re-binds the marker's popup and silently closes one just opened.
-const iconCache = new Map<string, DivIcon>();
+// A colored circle with initials, same look as the old Leaflet DivIcon —
+// Google's Marker takes an icon (image URL/Symbol), not arbitrary HTML, so
+// this builds the same bubble as an inline SVG data URI instead. Cached per
+// (color, label, focused) for the same reason the old DivIcon cache existed:
+// a 20s data refresh must hand Marker back an icon it already has, or it
+// treats it as changed and can misbehave on re-render.
+const iconCache = new Map<string, google.maps.Icon>();
 
-function carerIcon(color: string, label: string, focused: boolean) {
+function carerIcon(color: string, label: string, focused: boolean): google.maps.Icon {
   const key = `${color}|${label}|${focused}`;
   const cached = iconCache.get(key);
   if (cached) return cached;
 
   const size = focused ? 40 : 32;
-  const shadow = focused
-    ? `0 0 0 4px ${color}55, 0 2px 8px rgba(0,0,0,0.4)`
-    : "0 2px 6px rgba(0,0,0,0.35)";
-  const icon = new DivIcon({
-    html: `<div style="background:${color};color:white;border-radius:9999px;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-size:${
-      focused ? 13 : 12
-    }px;font-weight:700;border:2px solid white;box-shadow:${shadow};">${label}</div>`,
-    className: "",
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
+  const fontSize = focused ? 13 : 12;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="${color}" stroke="white" stroke-width="2" />
+    <text x="50%" y="50%" text-anchor="middle" dy=".35em" font-family="sans-serif" font-size="${fontSize}" font-weight="700" fill="white">${label}</text>
+  </svg>`;
+
+  const icon: google.maps.Icon = {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
   iconCache.set(key, icon);
   return icon;
 }
@@ -54,53 +55,9 @@ function formatTime(iso?: string) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
-const DEFAULT_CENTER: [number, number] = [-17.8252, 31.0335];
-
-/** Flies the map to a specific carer's last-known point once their live data
- * arrives, and opens their marker popup — this is what makes "view their
- * location" from elsewhere in the app land somewhere useful. */
-function FocusCarer({
-  carer,
-  markerRefs,
-}: {
-  carer: LiveMapCarer | undefined;
-  markerRefs: React.MutableRefObject<Map<number, LeafletMarker>>;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!carer) return;
-    const lastPoint = carer.trail.at(-1);
-    if (!lastPoint) return;
-    map.flyTo([lastPoint.latitude, lastPoint.longitude], 16, { duration: 1 });
-    markerRefs.current.get(carer.user_id)?.openPopup();
-  }, [carer, map, markerRefs]);
-
-  return null;
-}
-
-/**
- * Sets the initial view once live data first arrives, when no specific
- * carer was requested via ?carer= — centers on whoever most recently
- * checked in, since they're the most likely reason someone opened this
- * page without already knowing who to look for. Unlike FocusCarer this
- * only pans (keeps the current zoom, no popup) — landing here "cold"
- * should still show the surrounding area, not zoom in tight on one marker.
- */
-function DefaultCenter({ carer }: { carer: LiveMapCarer | undefined }) {
-  const map = useMap();
-  const appliedRef = useRef(false);
-
-  useEffect(() => {
-    if (appliedRef.current || !carer) return;
-    const lastPoint = carer.trail.at(-1);
-    if (!lastPoint) return;
-    map.setView([lastPoint.latitude, lastPoint.longitude], map.getZoom());
-    appliedRef.current = true;
-  }, [carer, map]);
-
-  return null;
-}
+const DEFAULT_CENTER = { lat: -17.8252, lng: 31.0335 };
+const MAP_CONTAINER_STYLE = { height: "600px", width: "100%" };
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 export function LiveMapPage() {
   const { user } = useAuth();
@@ -108,7 +65,14 @@ export function LiveMapPage() {
   const { data: branches } = useBranches(user?.tenant_id ?? 0);
   const { data } = useLiveMap(branchId);
   const [searchParams] = useSearchParams();
-  const markerRefs = useRef(new Map<number, LeafletMarker>());
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [openInfoWindowId, setOpenInfoWindowId] = useState<number | null>(null);
+  const defaultCenterAppliedRef = useRef(false);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY ?? "",
+  });
 
   const focusedCarerId = useMemo(() => {
     const raw = searchParams.get("carer");
@@ -134,6 +98,31 @@ export function LiveMapPage() {
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // Flies to a specific carer's last-known point once their live data
+  // arrives, and opens their info window — this is what makes "view their
+  // location" from elsewhere in the app land somewhere useful.
+  useEffect(() => {
+    if (!map || !focusedCarer) return;
+    const lastPoint = focusedCarer.trail.at(-1);
+    if (!lastPoint) return;
+    map.panTo({ lat: lastPoint.latitude, lng: lastPoint.longitude });
+    map.setZoom(16);
+    setOpenInfoWindowId(focusedCarer.user_id);
+  }, [map, focusedCarer]);
+
+  // Sets the initial view once live data first arrives, when no specific
+  // carer was requested via ?carer= — centers on whoever most recently
+  // checked in, since they're the most likely reason someone opened this
+  // page without already knowing who to look for. Unlike the focus effect
+  // above, this only pans (keeps the current zoom) and only runs once.
+  useEffect(() => {
+    if (!map || defaultCenterAppliedRef.current || focusedCarerId != null || !mostRecentlyCheckedInCarer) return;
+    const lastPoint = mostRecentlyCheckedInCarer.trail.at(-1);
+    if (!lastPoint) return;
+    map.setCenter({ lat: lastPoint.latitude, lng: lastPoint.longitude });
+    defaultCenterAppliedRef.current = true;
+  }, [map, focusedCarerId, mostRecentlyCheckedInCarer]);
 
   return (
     <div>
@@ -209,47 +198,62 @@ export function LiveMapPage() {
           </ul>
         </div>
 
-        <MapContainer center={DEFAULT_CENTER} zoom={13} style={{ height: "600px", width: "100%" }}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {carersWithTrail.map((carer, index) => {
-            const color = colorForCarer(index);
-            const lastPoint = carer.trail.at(-1);
-            const focused = carer.user_id === focusedCarerId;
-            return (
-              <Fragment key={carer.user_id}>
-                <Polyline
-                  positions={(carer.route.length > 0 ? carer.route : carer.trail).map((p) => [p.latitude, p.longitude])}
-                  color={color}
-                  weight={4}
-                />
-                {lastPoint && (
-                  <Marker
-                    ref={(instance) => {
-                      if (instance) markerRefs.current.set(carer.user_id, instance);
-                      else markerRefs.current.delete(carer.user_id);
-                    }}
-                    position={[lastPoint.latitude, lastPoint.longitude]}
-                    icon={carerIcon(color, initials(carer.name), focused)}
-                  >
-                    <Popup>
-                      <strong>{carer.name}</strong>
-                      <br />
-                      Last seen {formatTime(carer.last_ping_at ?? undefined)}
-                    </Popup>
-                  </Marker>
-                )}
-              </Fragment>
-            );
-          })}
-          {focusedCarerId != null ? (
-            <FocusCarer carer={focusedCarer} markerRefs={markerRefs} />
-          ) : (
-            <DefaultCenter carer={mostRecentlyCheckedInCarer} />
-          )}
-        </MapContainer>
+        {!GOOGLE_MAPS_API_KEY || loadError ? (
+          <div
+            style={MAP_CONTAINER_STYLE}
+            className="flex items-center justify-center bg-paper text-sm text-inksoft"
+          >
+            {loadError
+              ? "Couldn't load Google Maps — check the API key and its restrictions."
+              : "Google Maps isn't configured (VITE_GOOGLE_MAPS_API_KEY is missing)."}
+          </div>
+        ) : !isLoaded ? (
+          <div style={MAP_CONTAINER_STYLE} className="flex items-center justify-center bg-paper text-sm text-inksoft">
+            Loading map…
+          </div>
+        ) : (
+          <GoogleMap
+            mapContainerStyle={MAP_CONTAINER_STYLE}
+            center={DEFAULT_CENTER}
+            zoom={13}
+            onLoad={setMap}
+            onUnmount={() => setMap(null)}
+          >
+            {carersWithTrail.map((carer, index) => {
+              const color = colorForCarer(index);
+              const lastPoint = carer.trail.at(-1);
+              const focused = carer.user_id === focusedCarerId;
+              const path = (carer.route.length > 0 ? carer.route : carer.trail).map((p) => ({
+                lat: p.latitude,
+                lng: p.longitude,
+              }));
+
+              return (
+                <div key={carer.user_id}>
+                  <Polyline path={path} options={{ strokeColor: color, strokeWeight: 4 }} />
+                  {lastPoint && (
+                    <Marker
+                      position={{ lat: lastPoint.latitude, lng: lastPoint.longitude }}
+                      icon={carerIcon(color, initials(carer.name), focused)}
+                      onClick={() => setOpenInfoWindowId(carer.user_id)}
+                      zIndex={focused ? 1000 : undefined}
+                    >
+                      {openInfoWindowId === carer.user_id && (
+                        <InfoWindow onCloseClick={() => setOpenInfoWindowId(null)}>
+                          <div>
+                            <strong>{carer.name}</strong>
+                            <br />
+                            Last seen {formatTime(carer.last_ping_at ?? undefined)}
+                          </div>
+                        </InfoWindow>
+                      )}
+                    </Marker>
+                  )}
+                </div>
+              );
+            })}
+          </GoogleMap>
+        )}
       </Card>
 
       <OpenShiftsCard />
