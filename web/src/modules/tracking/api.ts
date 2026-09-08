@@ -30,6 +30,9 @@ export interface LiveMapCarer {
   trail: LiveMapPing[];
   /** trail's points snapped to roads (falls back to the raw trail server-side if that fails) — draw this, not trail, for the map line. */
   route: { latitude: number; longitude: number }[];
+  /** Where they checked in from — the only position available before their first live ping arrives. */
+  check_in_lat: number | null;
+  check_in_lng: number | null;
 }
 
 export interface LiveMapPerson {

@@ -150,6 +150,33 @@ class CarerLocationTest extends TestCase
         ], $carerAPayload['route']);
     }
 
+    public function test_live_map_places_a_checked_in_carer_with_no_pings_yet_at_their_check_in_position(): void
+    {
+        // A carer who just checked in (or whose phone hasn't posted a
+        // location yet) has no trail at all — they still need to show up
+        // somewhere on the map, using where they checked in from.
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeManager($tenant);
+        $carer = User::factory()->create(['tenant_id' => $tenant->id, 'name' => 'Carer A']);
+
+        DutyPeriod::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $carer->id,
+            'started_at' => now()->subMinutes(2),
+            'start_lat' => -17.8292,
+            'start_lng' => 31.0522,
+        ]);
+
+        $response = $this->actingAs($manager)->getJson('/api/v1/carer-locations/live');
+
+        $response->assertOk();
+        $carerPayload = collect($response->json('carers'))->firstWhere('user_id', $carer->id);
+        $this->assertTrue($carerPayload['is_checked_in']);
+        $this->assertCount(0, $carerPayload['trail']);
+        $this->assertSame(-17.8292, $carerPayload['check_in_lat']);
+        $this->assertSame(31.0522, $carerPayload['check_in_lng']);
+    }
+
     public function test_live_map_falls_back_to_the_raw_trail_when_osrm_is_unreachable(): void
     {
         Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('connection refused'));

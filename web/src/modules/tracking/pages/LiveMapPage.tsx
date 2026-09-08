@@ -55,6 +55,21 @@ function formatTime(iso?: string) {
   return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
+/**
+ * Where to draw a carer's marker: their latest live ping, or — while
+ * they're checked in but haven't posted one yet (just checked in, GPS still
+ * acquiring a fix) — where they checked in from, so they're never simply
+ * missing from the map. Returns null only when neither exists.
+ */
+function carerPosition(carer: LiveMapCarer): { lat: number; lng: number; isLive: boolean } | null {
+  const lastPoint = carer.trail.at(-1);
+  if (lastPoint) return { lat: lastPoint.latitude, lng: lastPoint.longitude, isLive: true };
+  if (carer.check_in_lat != null && carer.check_in_lng != null) {
+    return { lat: carer.check_in_lat, lng: carer.check_in_lng, isLive: false };
+  }
+  return null;
+}
+
 const DEFAULT_CENTER = { lat: -17.8252, lng: 31.0335 };
 const MAP_CONTAINER_STYLE = { height: "600px", width: "100%" };
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -79,34 +94,39 @@ export function LiveMapPage() {
     return raw ? Number(raw) : null;
   }, [searchParams]);
 
-  const carersWithTrail: LiveMapCarer[] = (data?.carers ?? []).filter((carer) => carer.trail.length > 0);
-  const focusedCarer = focusedCarerId != null ? carersWithTrail.find((c) => c.user_id === focusedCarerId) : undefined;
+  // Every checked-in carer belongs on the map, even in the short window
+  // before their first ping arrives (see carerPosition) — only a carer with
+  // neither a live trail nor a check-in position drops off entirely.
+  const carersOnMap: LiveMapCarer[] = (data?.carers ?? []).filter(
+    (carer) => carer.trail.length > 0 || (carer.is_checked_in && carerPosition(carer) != null),
+  );
+  const focusedCarer = focusedCarerId != null ? carersOnMap.find((c) => c.user_id === focusedCarerId) : undefined;
   const focusedCarerUnavailable = focusedCarerId != null && Boolean(data) && !focusedCarer;
 
-  // Whoever most recently checked in, among those we actually have a
-  // location for — the default the map centers on when nobody specific was
-  // asked for.
+  // Whoever most recently checked in, among those we can currently place on
+  // the map — the default the map centers on when nobody specific was asked
+  // for.
   const mostRecentlyCheckedInCarer = useMemo(() => {
     if (!data) return undefined;
     const byRecency = [...data.checked_in.items].sort(
       (a, b) => new Date(b.checked_in_at ?? 0).getTime() - new Date(a.checked_in_at ?? 0).getTime(),
     );
     for (const person of byRecency) {
-      const match = carersWithTrail.find((c) => c.user_id === person.user_id);
+      const match = carersOnMap.find((c) => c.user_id === person.user_id);
       if (match) return match;
     }
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // Flies to a specific carer's last-known point once their live data
+  // Flies to a specific carer's current position once their live data
   // arrives, and opens their info window — this is what makes "view their
   // location" from elsewhere in the app land somewhere useful.
   useEffect(() => {
     if (!map || !focusedCarer) return;
-    const lastPoint = focusedCarer.trail.at(-1);
-    if (!lastPoint) return;
-    map.panTo({ lat: lastPoint.latitude, lng: lastPoint.longitude });
+    const position = carerPosition(focusedCarer);
+    if (!position) return;
+    map.panTo(position);
     map.setZoom(16);
     setOpenInfoWindowId(focusedCarer.user_id);
   }, [map, focusedCarer]);
@@ -118,9 +138,9 @@ export function LiveMapPage() {
   // above, this only pans (keeps the current zoom) and only runs once.
   useEffect(() => {
     if (!map || defaultCenterAppliedRef.current || focusedCarerId != null || !mostRecentlyCheckedInCarer) return;
-    const lastPoint = mostRecentlyCheckedInCarer.trail.at(-1);
-    if (!lastPoint) return;
-    map.setCenter({ lat: lastPoint.latitude, lng: lastPoint.longitude });
+    const position = carerPosition(mostRecentlyCheckedInCarer);
+    if (!position) return;
+    map.setCenter(position);
     defaultCenterAppliedRef.current = true;
   }, [map, focusedCarerId, mostRecentlyCheckedInCarer]);
 
@@ -219,9 +239,9 @@ export function LiveMapPage() {
             onLoad={setMap}
             onUnmount={() => setMap(null)}
           >
-            {carersWithTrail.map((carer, index) => {
+            {carersOnMap.map((carer, index) => {
               const color = colorForCarer(index);
-              const lastPoint = carer.trail.at(-1);
+              const position = carerPosition(carer);
               const focused = carer.user_id === focusedCarerId;
               const path = (carer.route.length > 0 ? carer.route : carer.trail).map((p) => ({
                 lat: p.latitude,
@@ -230,11 +250,12 @@ export function LiveMapPage() {
 
               return (
                 <div key={carer.user_id}>
-                  <Polyline path={path} options={{ strokeColor: color, strokeWeight: 4 }} />
-                  {lastPoint && (
+                  {path.length > 1 && <Polyline path={path} options={{ strokeColor: color, strokeWeight: 4 }} />}
+                  {position && (
                     <Marker
-                      position={{ lat: lastPoint.latitude, lng: lastPoint.longitude }}
+                      position={position}
                       icon={carerIcon(color, initials(carer.name), focused)}
+                      opacity={position.isLive ? 1 : 0.6}
                       onClick={() => setOpenInfoWindowId(carer.user_id)}
                       zIndex={focused ? 1000 : undefined}
                     >
@@ -243,7 +264,9 @@ export function LiveMapPage() {
                           <div>
                             <strong>{carer.name}</strong>
                             <br />
-                            Last seen {formatTime(carer.last_ping_at ?? undefined)}
+                            {position.isLive
+                              ? `Last seen ${formatTime(carer.last_ping_at ?? undefined)}`
+                              : "Checked in — waiting for a location signal"}
                           </div>
                         </InfoWindow>
                       )}

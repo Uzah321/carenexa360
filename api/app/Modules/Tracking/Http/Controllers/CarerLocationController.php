@@ -126,6 +126,13 @@ class CarerLocationController extends Controller
                 // outside the loaded map region.
                 'route' => RoadSnapper::snap($trail->all())
                     ?? $trail->map(fn (array $p) => ['latitude' => $p['latitude'], 'longitude' => $p['longitude']])->all(),
+                // Where this carer checked in from — the only position we have
+                // for someone on duty whose phone hasn't posted a live ping yet
+                // (just checked in, GPS still acquiring a fix, tracking denied).
+                // The frontend falls back to this only while trail is empty, so
+                // a checked-in carer is never simply missing from the map.
+                'check_in_lat' => $period->start_lat !== null ? (float) $period->start_lat : null,
+                'check_in_lng' => $period->start_lng !== null ? (float) $period->start_lng : null,
             ];
         }
 
