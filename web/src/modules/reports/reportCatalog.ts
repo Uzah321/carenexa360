@@ -161,6 +161,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
     key: "gps_verification",
     label: "GPS / Visit Verification Reports",
     reports: [
+      { label: "Trips activity report", key: "trips_activity" },
       { label: "Verified check-ins", key: "verified_checkins" },
       { label: "Check-in distance from client", key: "checkin_distance" },
       { label: "Manual overrides", key: "manual_overrides" },

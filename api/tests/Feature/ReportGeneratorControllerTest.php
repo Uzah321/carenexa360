@@ -299,6 +299,56 @@ class ReportGeneratorControllerTest extends TestCase
         $overrides->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('rows.0.override_reason', 'GPS signal was weak indoors');
     }
 
+    public function test_trips_activity_report_verdicts_each_visit_on_its_own_gps_evidence(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        $serviceUser = ServiceUser::create([
+            'tenant_id' => $tenant->id, 'first_name' => 'Ruth', 'last_name' => 'Chikafu',
+            'latitude' => -17.8292, 'longitude' => 31.0522,
+        ]);
+
+        // Never checked in at all — the carer's whereabouts for this slot
+        // are simply unaccounted for.
+        Visit::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id,
+            'visit_date' => '2026-06-14', 'start_time' => '09:00', 'end_time' => '10:00', 'status' => 'missed',
+        ]);
+        // Checked in and out right at the client's address.
+        Visit::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id,
+            'visit_date' => '2026-06-15', 'start_time' => '09:00', 'end_time' => '10:00', 'status' => 'completed',
+            'check_in_at' => '2026-06-15 09:00:00', 'check_in_lat' => -17.8292, 'check_in_lng' => 31.0522,
+            'check_out_at' => '2026-06-15 10:00:00', 'check_out_lat' => -17.8292, 'check_out_lng' => 31.0522,
+        ]);
+        // Checked in far away, with an override reason on file.
+        Visit::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id,
+            'visit_date' => '2026-06-16', 'start_time' => '09:00', 'end_time' => '10:00', 'status' => 'completed',
+            'check_in_at' => '2026-06-16 09:00:00', 'check_in_lat' => -17.9, 'check_in_lng' => 31.1,
+            'override_reason' => 'GPS signal was weak indoors',
+        ]);
+        // Checked in far away with no override on file at all — shouldn't
+        // happen through the app's own check-in flow, but the report has to
+        // call this out clearly if it ever turns up in the data.
+        Visit::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id,
+            'visit_date' => '2026-06-17', 'start_time' => '09:00', 'end_time' => '10:00', 'status' => 'completed',
+            'check_in_at' => '2026-06-17 09:00:00', 'check_in_lat' => -17.9, 'check_in_lng' => 31.1,
+        ]);
+
+        $response = $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=trips_activity&from=2026-06-01&to=2026-06-30');
+
+        $response->assertOk()->assertJsonCount(4, 'rows');
+        $rows = collect($response->json('rows'))->keyBy('date');
+        $this->assertSame('No check-in', $rows['2026-06-14']['trip_verified']);
+        $this->assertSame('Verified', $rows['2026-06-15']['trip_verified']);
+        $this->assertSame(0, $rows['2026-06-15']['check_in_distance_m']);
+        $this->assertSame(0, $rows['2026-06-15']['check_out_distance_m']);
+        $this->assertSame('Overridden', $rows['2026-06-16']['trip_verified']);
+        $this->assertSame('Out of range', $rows['2026-06-17']['trip_verified']);
+    }
+
     public function test_care_plan_reviews_overdue_lists_sections_past_their_review_date(): void
     {
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);

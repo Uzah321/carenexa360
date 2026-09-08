@@ -12,6 +12,7 @@ use App\Modules\Medications\Models\MedicationAdministration;
 use App\Modules\Observations\Models\ClinicalAlert;
 use App\Modules\Observations\Models\Observation;
 use App\Modules\Organization\Models\Branch;
+use App\Modules\Organization\Models\Tenant;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Reports\Support\ReportRoles;
 use App\Modules\Rostering\Models\Shift;
@@ -142,6 +143,7 @@ class ReportGeneratorController extends Controller
             'care_plan_reviews_overdue' => $this->overdueReviews($filters),
 
             // GPS / Visit Verification
+            'trips_activity' => $this->tripsActivity($filters),
             'verified_checkins' => $this->checkinList($filters, 'verified'),
             'manual_overrides' => $this->checkinList($filters, 'overrides'),
             'suspicious_checkins' => $this->checkinList($filters, 'suspicious'),
@@ -1006,6 +1008,85 @@ class ReportGeneratorController extends Controller
     }
 
     // ---- GPS / Visit Verification ----------------------------------------
+
+    /**
+     * Every scheduled visit in range, GPS-checked against the client's
+     * address — not just the ones with a check-in (unlike checkinList()
+     * below), so a carer who never showed up at all shows up as clearly as
+     * one who did but outside the geofence. This is the "did they actually
+     * go" report: Trip Verified is the single column that answers it,
+     * everything else is the evidence for that verdict.
+     */
+    private function tripsActivity(array $filters): array
+    {
+        $visits = Visit::whereBetween('visit_date', [$filters['from'], $filters['to']])
+            ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
+            ->with(['serviceUser', 'carer'])
+            ->orderBy('visit_date')->orderBy('start_time')
+            ->get();
+
+        // Cached per tenant so a platform-wide run of this report doesn't
+        // re-fetch the same tenant's setting for every row.
+        $radiusByTenant = [];
+        $geofenceRadius = function (int $tenantId) use (&$radiusByTenant) {
+            return $radiusByTenant[$tenantId] ??= (int) (Tenant::find($tenantId)?->setting('geofence_radius_meters') ?? 100);
+        };
+
+        $rows = $visits->map(function (Visit $v) use ($geofenceRadius) {
+            $checkInDistance = ($v->check_in_lat !== null && $v->serviceUser?->latitude)
+                ? Haversine::distanceInMeters(
+                    (float) $v->check_in_lat, (float) $v->check_in_lng,
+                    (float) $v->serviceUser->latitude, (float) $v->serviceUser->longitude,
+                )
+                : null;
+            $checkOutDistance = ($v->check_out_lat !== null && $v->serviceUser?->latitude)
+                ? Haversine::distanceInMeters(
+                    (float) $v->check_out_lat, (float) $v->check_out_lng,
+                    (float) $v->serviceUser->latitude, (float) $v->serviceUser->longitude,
+                )
+                : null;
+
+            $tripVerified = match (true) {
+                ! $v->check_in_at => 'No check-in',
+                (bool) $v->override_reason => 'Overridden',
+                $checkInDistance === null => 'Unverifiable — no client address on file',
+                $checkInDistance <= $geofenceRadius($v->tenant_id) => 'Verified',
+                default => 'Out of range',
+            };
+
+            return [
+                'date' => $v->visit_date->toDateString(),
+                'client' => $this->clientName($v->serviceUser),
+                'carer' => $v->carer->name ?? 'Unassigned',
+                'scheduled' => "{$v->start_time}–{$v->end_time}",
+                'status' => str_replace('_', ' ', $v->status),
+                'check_in' => $v->check_in_at?->format('H:i') ?? '—',
+                'check_in_distance_m' => $checkInDistance !== null ? round($checkInDistance) : '—',
+                'check_out' => $v->check_out_at?->format('H:i') ?? '—',
+                'check_out_distance_m' => $checkOutDistance !== null ? round($checkOutDistance) : '—',
+                'trip_verified' => $tripVerified,
+                'override_reason' => $v->override_reason ?? '—',
+            ];
+        });
+
+        return [
+            'title' => 'Trips Activity Report',
+            'columns' => [
+                ['key' => 'date', 'label' => 'Date'],
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'carer', 'label' => 'Carer'],
+                ['key' => 'scheduled', 'label' => 'Scheduled'],
+                ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'check_in', 'label' => 'Check-In'],
+                ['key' => 'check_in_distance_m', 'label' => 'Check-In Distance (m)'],
+                ['key' => 'check_out', 'label' => 'Check-Out'],
+                ['key' => 'check_out_distance_m', 'label' => 'Check-Out Distance (m)'],
+                ['key' => 'trip_verified', 'label' => 'Trip Verified'],
+                ['key' => 'override_reason', 'label' => 'Override Reason'],
+            ],
+            'rows' => $rows,
+        ];
+    }
 
     private function checkinList(array $filters, string $mode): array
     {
