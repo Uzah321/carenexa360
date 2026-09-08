@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Modules\Identity\Support\DefaultRoles;
+use App\Modules\Marketing\Support\DemoTenant;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Tenant;
 use Illuminate\Database\Seeder;
@@ -73,8 +74,8 @@ class DatabaseSeeder extends Seeder
         $tenantAdmin = User::factory()->create([
             'tenant_id' => $tenant->id,
             'name' => 'Demo Org Admin',
-            'email' => 'orgadmin@demo-care-group.test',
-            'password' => 'password',
+            'email' => DemoTenant::LOGIN_EMAIL,
+            'password' => DemoTenant::LOGIN_PASSWORD,
         ]);
         $tenantAdmin->assignRole($orgAdminRole);
 

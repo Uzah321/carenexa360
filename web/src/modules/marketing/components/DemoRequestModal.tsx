@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Alert, Button, FormField, Input, Modal, Textarea } from "../../../design-system";
 import { useCreateDemoRequest } from "../api";
 
@@ -65,9 +66,32 @@ export function DemoRequestModal({ isOpen, onClose }: { isOpen: boolean; onClose
       }
     >
       {createDemoRequest.isSuccess ? (
-        <Alert tone="success">
-          Thanks — we've got your request and someone from our team will be in touch shortly.
-        </Alert>
+        <div>
+          <Alert tone="success">
+            Thanks — we've got your request and someone from our team will be in touch shortly. We've also emailed
+            you a copy of this.
+          </Alert>
+          <p className="mt-4 text-sm text-inksoft">
+            No need to wait, though — log in now to a live demo with realistic sample data (staff, service users,
+            schedules, care plans, and more) and explore it yourself:
+          </p>
+          <dl className="mt-3 space-y-1 rounded-xl bg-paper p-4 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-inksoft">Email</dt>
+              <dd className="font-mono font-medium text-ink">{createDemoRequest.data?.demo_login.email}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-inksoft">Password</dt>
+              <dd className="font-mono font-medium text-ink">{createDemoRequest.data?.demo_login.password}</dd>
+            </div>
+          </dl>
+          <Link
+            to="/login"
+            className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-teal px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-teal/90"
+          >
+            Log In to the Demo →
+          </Link>
+        </div>
       ) : (
         <form id="demo-request-form" onSubmit={handleSubmit}>
           {error && (

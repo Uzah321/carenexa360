@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Modules\Marketing\Support\DemoTenant;
+use App\Notifications\DemoRequestConfirmationNotification;
+use App\Notifications\DemoRequestReceivedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -27,6 +30,41 @@ class DemoRequestTest extends TestCase
             'email' => 'jordan@riverside-care.test',
             'organization_name' => 'Riverside Home Care',
         ]);
+    }
+
+    public function test_the_response_includes_the_shared_demo_login(): void
+    {
+        Notification::fake();
+
+        $response = $this->postJson('/api/v1/demo-requests', [
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'organization_name' => 'Riverside Home Care',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('demo_login.email', DemoTenant::LOGIN_EMAIL)
+            ->assertJsonPath('demo_login.password', DemoTenant::LOGIN_PASSWORD);
+    }
+
+    public function test_it_notifies_both_the_sales_inbox_and_the_requester(): void
+    {
+        Notification::fake();
+
+        $this->postJson('/api/v1/demo-requests', [
+            'name' => 'Jordan Smith',
+            'email' => 'jordan@riverside-care.test',
+            'organization_name' => 'Riverside Home Care',
+        ])->assertCreated();
+
+        Notification::assertSentOnDemand(
+            DemoRequestReceivedNotification::class,
+            fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === config('app.demo_requests_email'),
+        );
+        Notification::assertSentOnDemand(
+            DemoRequestConfirmationNotification::class,
+            fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'jordan@riverside-care.test',
+        );
     }
 
     public function test_a_demo_request_requires_the_core_fields(): void

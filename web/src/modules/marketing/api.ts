@@ -9,11 +9,15 @@ export interface CreateDemoRequestInput {
   message?: string;
 }
 
+export interface CreateDemoRequestResult {
+  demo_login: { email: string; password: string };
+}
+
 export function useCreateDemoRequest() {
   return useMutation({
     mutationFn: async (input: CreateDemoRequestInput) => {
       await ensureCsrfCookie();
-      const { data } = await apiClient.post("/demo-requests", input);
+      const { data } = await apiClient.post<CreateDemoRequestResult>("/demo-requests", input);
       return data;
     },
   });
