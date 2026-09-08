@@ -10,7 +10,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, breadcrumbs, actions }: PageHeaderProps) {
   return (
-    <div className="mb-6 rounded-2xl border border-line bg-white px-4 py-4 sm:px-5">
+    <div className="sticky top-0 z-10 mb-6 rounded-2xl border border-line bg-white px-4 py-4 shadow-sm sm:px-5 print:static print:shadow-none">
       {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
       <div className="mt-1 flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
