@@ -18,11 +18,12 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { useAuth } from "../../../lib/auth-context";
 import { useCreateVisit, useUpdateVisitStatus, useVisits, type CreateVisitInput } from "../api";
 import { EditVisitModal } from "../components/EditVisitModal";
 import { useServiceUsers } from "../../service-users/api";
 import { useStaff } from "../../staff/api";
-import { deliversVisits } from "../../../lib/types";
+import { deliversVisits, ROSTERING_ROLES } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
 import { todayIso } from "../../../lib/dates";
 
@@ -48,6 +49,9 @@ const EMPTY_FORM: CreateVisitInput = {
 const CANCELLABLE_STATUSES: VisitStatus[] = ["scheduled", "in_progress"];
 
 export function VisitsPage() {
+  const { hasAnyRole } = useAuth();
+  const canCreateVisit = hasAnyRole(ROSTERING_ROLES);
+
   // Defaults to today, matching Schedule/My Day — an unfiltered list sorted
   // oldest-first buried new visits 20+ rows down with no pagination to reach
   // them, which is exactly what made "create a visit" look like it silently
@@ -168,7 +172,7 @@ export function VisitsPage() {
             <Link to="/visits/route" className="text-sm font-medium text-teal hover:text-teal/90">
               View Route Planner
             </Link>
-            <Button onClick={openCreate}>New Visit</Button>
+            {canCreateVisit && <Button onClick={openCreate}>New Visit</Button>}
           </div>
         </div>
       </div>

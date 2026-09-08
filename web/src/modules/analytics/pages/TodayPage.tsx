@@ -15,9 +15,11 @@ import {
   StatusBadge,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { useAuth } from "../../../lib/auth-context";
 import { useServiceUsers } from "../../service-users/api";
 import { useStaff } from "../../staff/api";
 import { useCreateVisit, type CreateVisitInput } from "../../visits/api";
+import { ROSTERING_ROLES } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
 import { useClientSnapshot, useToday } from "../api";
 import { todayIso } from "../../../lib/dates";
@@ -200,6 +202,9 @@ const EMPTY_VISIT_FORM = {
 };
 
 export function TodayPage() {
+  const { hasAnyRole } = useAuth();
+  const canCreateVisit = hasAnyRole(ROSTERING_ROLES);
+
   const [date, setDate] = useState(todayIso());
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -248,7 +253,7 @@ export function TodayPage() {
         </div>
         <div className="flex items-center gap-2">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto rounded-full" />
-          <Button onClick={() => setIsCreateOpen(true)}>New visit</Button>
+          {canCreateVisit && <Button onClick={() => setIsCreateOpen(true)}>New visit</Button>}
         </div>
       </div>
 

@@ -26,6 +26,8 @@ class VisitTest extends TestCase
             'last_name' => 'Smith',
         ]);
 
+        $this->assignRole($admin, $tenant, 'Organization Admin');
+
         return compact('tenant', 'admin', 'carer', 'serviceUser');
     }
 
@@ -216,6 +218,22 @@ class VisitTest extends TestCase
         $this->actingAs($carer)
             ->patchJson("/api/v1/visits/{$visit->id}", ['notes' => 'Client asked to reschedule.'])
             ->assertOk();
+    }
+
+    public function test_a_carer_cannot_create_a_visit(): void
+    {
+        ['tenant' => $tenant, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+        $this->assignRole($carer, $tenant, 'Carer / Support Worker');
+
+        $this->actingAs($carer)->postJson('/api/v1/visits', [
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carer->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '09:30',
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('visits', 0);
     }
 
     public function test_a_care_coordinator_can_reassign_a_visit(): void

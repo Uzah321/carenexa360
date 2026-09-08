@@ -35,6 +35,15 @@ class VisitController extends Controller
 
     public function store(StoreVisitRequest $request)
     {
+        // Same gate as reassigning/rescheduling an existing visit (see
+        // update() below) — creating one is at least as consequential, and
+        // was previously left open to any tenant user, carers included.
+        abort_unless(
+            $request->user()->hasAnyRole(SchedulingRoles::ALLOWED),
+            403,
+            'You do not have permission to create visits.'
+        );
+
         $tenantId = $request->user()->tenant_id;
         $carerId = $request->validated('carer_id');
         $recurrence = $request->validated('recurrence');
