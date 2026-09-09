@@ -7,6 +7,7 @@ use App\Modules\Assessments\Http\Controllers\AssessmentTemplateController;
 use App\Modules\Audit\Http\Controllers\AuditLogController;
 use App\Modules\Billing\Http\Controllers\FunderController;
 use App\Modules\Billing\Http\Controllers\InvoiceController;
+use App\Modules\CareNotes\Http\Controllers\CareNoteController;
 use App\Modules\CarePlanning\Http\Controllers\CarePlanController;
 use App\Modules\Communication\Http\Controllers\AnnouncementController;
 use App\Modules\Compliance\Http\Controllers\ComplianceDocumentController;
@@ -106,6 +107,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('/{serviceUser}/documents', [DocumentController::class, 'index']);
                 Route::post('/{serviceUser}/documents', [DocumentController::class, 'store']);
 
+                Route::get('/{serviceUser}/care-notes', [CareNoteController::class, 'index']);
+                Route::post('/{serviceUser}/care-notes', [CareNoteController::class, 'store']);
+
                 Route::get('/{serviceUser}/medications', [MedicationController::class, 'index']);
                 Route::post('/{serviceUser}/medications', [MedicationController::class, 'store']);
 
@@ -123,6 +127,9 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/documents/{document}/download', [DocumentController::class, 'download']);
             Route::delete('/documents/{document}', [DocumentController::class, 'destroy']);
+
+            Route::get('/care-notes/{careNote}/audio', [CareNoteController::class, 'audio']);
+            Route::delete('/care-notes/{careNote}', [CareNoteController::class, 'destroy']);
 
             Route::prefix('medications')->group(function () {
                 Route::get('/{medication}', [MedicationController::class, 'show']);

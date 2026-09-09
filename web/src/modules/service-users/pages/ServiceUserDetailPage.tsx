@@ -6,6 +6,7 @@ import { OverviewTab } from "../components/OverviewTab";
 import { CarePlanTab } from "../components/CarePlanTab";
 import { AssessmentsTab } from "../components/AssessmentsTab";
 import { DocumentsTab } from "../components/DocumentsTab";
+import { CareNotesTab } from "../components/CareNotesTab";
 import { MedicationsTab } from "../components/MedicationsTab";
 import { ObservationsTab } from "../components/ObservationsTab";
 import { IncidentsTab } from "../components/IncidentsTab";
@@ -50,6 +51,7 @@ export function ServiceUserDetailPage() {
           { key: "observations", label: "Observations" },
           { key: "incidents", label: "Incidents" },
           { key: "documents", label: "Documents" },
+          { key: "notes", label: "Notes" },
         ]}
         activeKey={tab}
         onChange={setTab}
@@ -62,6 +64,7 @@ export function ServiceUserDetailPage() {
         {tab === "observations" && <ObservationsTab serviceUserId={id} />}
         {tab === "incidents" && <IncidentsTab serviceUserId={id} />}
         {tab === "documents" && <DocumentsTab serviceUserId={id} />}
+        {tab === "notes" && <CareNotesTab serviceUserId={id} />}
       </div>
     </div>
   );

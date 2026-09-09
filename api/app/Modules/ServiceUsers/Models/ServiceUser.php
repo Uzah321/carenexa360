@@ -5,6 +5,7 @@ namespace App\Modules\ServiceUsers\Models;
 use App\Models\User;
 use App\Modules\Assessments\Models\AssessmentResponse;
 use App\Modules\Billing\Models\Funder;
+use App\Modules\CareNotes\Models\CareNote;
 use App\Modules\Billing\Models\Invoice;
 use App\Modules\CarePlanning\Models\CarePlan;
 use App\Modules\Documents\Models\Document;
@@ -105,6 +106,11 @@ class ServiceUser extends Model
     public function documents(): MorphMany
     {
         return $this->morphMany(Document::class, 'documentable');
+    }
+
+    public function careNotes(): HasMany
+    {
+        return $this->hasMany(CareNote::class);
     }
 
     public function assessmentResponses(): HasMany

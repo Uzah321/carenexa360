@@ -251,6 +251,27 @@ export interface CareDocument {
   created_at: string;
 }
 
+export interface CareNote {
+  id: number;
+  caption: string | null;
+  mime_type: string | null;
+  size: number;
+  duration_seconds: number | null;
+  visit_id: number | null;
+  author_id: number;
+  author_name?: string | null;
+  created_at: string;
+}
+
+// Mirrors App\Modules\CareNotes\Http\Controllers\CareNoteController::CAN_MODERATE
+// on the backend — who can delete a care note someone else recorded.
+export const CARE_NOTE_MODERATOR_ROLES = [
+  "Organization Owner",
+  "Organization Admin",
+  "Branch Manager",
+  "Care Manager",
+] as const;
+
 // Mirrors App\Modules\Identity\Support\DefaultRoles::TENANT_ROLES on the
 // backend — every tenant is auto-seeded with exactly these roles (see
 // TenantObserver), and custom roles aren't supported yet, so it's safe to
