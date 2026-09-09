@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Alert, Button, FormField, Input, Modal, Select, TagInput } from "../../../design-system";
+import { Alert, Button, FormField, Input, Modal, Select, TagInput, Textarea } from "../../../design-system";
 import { useStaff } from "../../staff/api";
 import { VISIT_PRIORITIES, deliversVisits, type Visit } from "../../../lib/types";
 import { useUpdateVisit, type UpdateVisitInput } from "../api";
@@ -157,7 +157,7 @@ export function EditVisitModal({ visit, onClose }: { visit: Visit | null; onClos
           />
         </FormField>
         <FormField label="Notes" htmlFor="edit-visit-notes">
-          <Input
+          <Textarea
             id="edit-visit-notes"
             value={editForm.notes ?? ""}
             onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
