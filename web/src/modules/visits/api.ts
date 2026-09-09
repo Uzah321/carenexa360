@@ -159,7 +159,12 @@ export function useRoute(carerId: number | null, date: string) {
   return useQuery({
     queryKey: ["visits", "route", carerId, date],
     queryFn: async () => {
-      const { data } = await apiClient.get<{ data: Visit[]; stops: RouteStop[] }>("/visits/route", {
+      const { data } = await apiClient.get<{
+        data: Visit[];
+        stops: RouteStop[];
+        /** Road-following path through the stops, in order — null if OSRM couldn't route it. */
+        route: { latitude: number; longitude: number }[] | null;
+      }>("/visits/route", {
         params: { carer_id: carerId, date },
       });
       return data;

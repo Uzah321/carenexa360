@@ -126,7 +126,14 @@ export function RoutePage() {
                   </Popup>
                 </Marker>
               ))}
-              <Polyline positions={stops.map((s) => [s.latitude, s.longitude])} color="#00b4a3" />
+              <Polyline
+                positions={
+                  routeData?.route && routeData.route.length > 1
+                    ? routeData.route.map((p) => [p.latitude, p.longitude])
+                    : stops.map((s) => [s.latitude, s.longitude])
+                }
+                color="#00b4a3"
+              />
             </MapContainer>
           </Card>
         </div>

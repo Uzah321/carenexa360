@@ -3,6 +3,7 @@
 namespace App\Modules\Visits\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Tracking\Support\RoadSnapper;
 use App\Modules\Visits\Http\Resources\VisitResource;
 use App\Modules\Visits\Models\Visit;
 use Illuminate\Http\Request;
@@ -22,14 +23,20 @@ class RouteController extends Controller
             ->orderBy('start_time')
             ->get();
 
+        $stops = $visits->map(fn (Visit $visit) => [
+            'visit_id' => $visit->id,
+            'label' => trim("{$visit->serviceUser?->first_name} {$visit->serviceUser?->last_name}"),
+            'start_time' => $visit->start_time,
+            'latitude' => $visit->serviceUser?->latitude,
+            'longitude' => $visit->serviceUser?->longitude,
+        ])->filter(fn ($stop) => $stop['latitude'] && $stop['longitude'])->values();
+
         return VisitResource::collection($visits)->additional([
-            'stops' => $visits->map(fn (Visit $visit) => [
-                'visit_id' => $visit->id,
-                'label' => trim("{$visit->serviceUser?->first_name} {$visit->serviceUser?->last_name}"),
-                'start_time' => $visit->start_time,
-                'latitude' => $visit->serviceUser?->latitude,
-                'longitude' => $visit->serviceUser?->longitude,
-            ])->filter(fn ($stop) => $stop['latitude'] && $stop['longitude'])->values(),
+            'stops' => $stops,
+            // Road-following version of the same stops, for the map line —
+            // falls back to null (straight lines between stops, drawn
+            // client-side) whenever OSRM can't route it.
+            'route' => RoadSnapper::routeWaypoints($stops->all()),
         ]);
     }
 }

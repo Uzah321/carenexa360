@@ -124,6 +124,56 @@ class RoadSnapper
         }
     }
 
+    /**
+     * Road-following path through a small set of deliberate waypoints (e.g.
+     * a carer's visits for the day, in order) — not a noisy GPS trace, so
+     * this uses `/route` rather than `/match`: each point genuinely is a
+     * place the path must pass through, in the given order, and there's no
+     * jitter to reason about with timestamps/radiuses. `/match`'s
+     * confidence scoring is tuned for a dense trace close in time and
+     * space; sparse, minutes-or-kilometres-apart stops are exactly what
+     * `/route`'s waypoint routing is for.
+     *
+     * @param  array<int, array{latitude: float, longitude: float}>  $points  In visit order.
+     * @return array<int, array{latitude: float, longitude: float}>|null
+     */
+    public static function routeWaypoints(array $points): ?array
+    {
+        if (count($points) < 2) {
+            return null;
+        }
+
+        $coordinates = collect($points)->map(fn (array $p) => "{$p['longitude']},{$p['latitude']}")->implode(';');
+
+        try {
+            $response = Http::timeout(3)->get(
+                rtrim((string) config('services.osrm.url'), '/')."/route/v1/driving/{$coordinates}",
+                ['overview' => 'full', 'geometries' => 'geojson'],
+            );
+
+            if (! $response->successful() || $response->json('code') !== 'Ok') {
+                return null;
+            }
+
+            $geometry = $response->json('routes.0.geometry.coordinates');
+            if (! is_array($geometry) || count($geometry) < 2) {
+                return null;
+            }
+
+            // GeoJSON coordinates are [lng, lat] — flip to match latitude/longitude
+            // everywhere else in this app.
+            return collect($geometry)
+                ->map(fn (array $pair) => ['latitude' => $pair[1], 'longitude' => $pair[0]])
+                ->all();
+        } catch (\Throwable $e) {
+            Log::warning('OSRM route-through-waypoints failed, falling back to straight lines between stops.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     private static function timestampFor(array $point): int
     {
         $recordedAt = $point['recorded_at'] ?? null;
