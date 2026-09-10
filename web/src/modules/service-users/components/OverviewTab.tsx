@@ -11,11 +11,13 @@ import {
   FormField,
   Input,
   Modal,
+  RowActionsMenu,
   Select,
   StatusBadge,
   TagInput,
   Textarea,
   type Column,
+  type RowAction,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { downloadDocument, useServiceUserDocuments, useUploadDocument } from "../../documents/api";
@@ -156,14 +158,14 @@ function EditableCard({
   children: ReactNode;
   form: ReactNode;
 }) {
+  const actions: RowAction[] = [{ label: "Edit", onClick: () => onOpenChange(true) }];
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <span>{title}</span>
-          <Button variant="secondary" onClick={() => onOpenChange(true)}>
-            Edit
-          </Button>
+          <RowActionsMenu actions={actions} label={`${title} actions`} />
         </div>
       </CardHeader>
       <CardBody>{children}</CardBody>
