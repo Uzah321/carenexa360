@@ -5,15 +5,18 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FileUpload,
   FormField,
   Input,
+  RowActionsMenu,
   type Column,
+  type RowAction,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
-import { downloadDocument, useServiceUserDocuments, useUploadDocument } from "../../documents/api";
+import { downloadDocument, useDeleteDocument, useServiceUserDocuments, useUploadDocument } from "../../documents/api";
 import type { CareDocument } from "../../../lib/types";
 
 function formatSize(bytes: number): string {
@@ -25,10 +28,13 @@ function formatSize(bytes: number): string {
 export function DocumentsTab({ serviceUserId }: { serviceUserId: number }) {
   const { data: documents, isLoading } = useServiceUserDocuments(serviceUserId);
   const upload = useUploadDocument(serviceUserId);
+  const deleteDocument = useDeleteDocument(serviceUserId);
 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [category, setCategory] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CareDocument | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleUpload() {
     if (!pendingFile) return;
@@ -42,6 +48,17 @@ export function DocumentsTab({ serviceUserId }: { serviceUserId: number }) {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteError(null);
+    try {
+      await deleteDocument.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(apiErrorMessage(err, "Could not delete this document. Please try again."));
+    }
+  }
+
   const columns: Column<CareDocument>[] = [
     { key: "filename", header: "File", render: (row) => row.original_filename },
     { key: "category", header: "Category", render: (row) => row.category ?? "—" },
@@ -50,15 +67,14 @@ export function DocumentsTab({ serviceUserId }: { serviceUserId: number }) {
     {
       key: "actions",
       header: "",
-      render: (row) => (
-        <button
-          type="button"
-          className="text-sm font-medium text-teal hover:text-teal/90"
-          onClick={() => downloadDocument(row.id, row.original_filename)}
-        >
-          Download
-        </button>
-      ),
+      className: "text-right",
+      render: (row) => {
+        const actions: RowAction[] = [
+          { label: "Download", onClick: () => downloadDocument(row.id, row.original_filename) },
+          { label: "Delete", onClick: () => setDeleteTarget(row), tone: "danger" },
+        ];
+        return <RowActionsMenu actions={actions} label={`${row.original_filename} actions`} />;
+      },
     },
   ];
 
@@ -89,6 +105,21 @@ export function DocumentsTab({ serviceUserId }: { serviceUserId: number }) {
           <DataTable columns={columns} rows={documents ?? []} rowKey={(row) => row.id} isLoading={isLoading} />
         )}
       </CardBody>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete document"
+        message={`Delete "${deleteTarget?.original_filename}"? This permanently removes the file — this can't be undone.`}
+        confirmLabel="Delete"
+        tone="danger"
+        isLoading={deleteDocument.isPending}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+      />
     </Card>
   );
 }

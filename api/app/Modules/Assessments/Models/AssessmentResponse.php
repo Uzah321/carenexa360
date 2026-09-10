@@ -22,6 +22,7 @@ class AssessmentResponse extends Model
         'completed_by',
         'completed_at',
         'status',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -29,6 +30,7 @@ class AssessmentResponse extends Model
         return [
             'answers' => 'array',
             'completed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 

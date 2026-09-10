@@ -20,6 +20,7 @@ class ObservationResource extends JsonResource
             'recorded_by_name' => $this->whenLoaded('recordedBy', fn () => $this->recordedBy?->name),
             'recorded_at' => $this->recorded_at,
             'notes' => $this->notes,
+            'archived_at' => $this->archived_at,
             'alerts' => ClinicalAlertResource::collection($this->whenLoaded('alerts')),
             'created_at' => $this->created_at,
         ];

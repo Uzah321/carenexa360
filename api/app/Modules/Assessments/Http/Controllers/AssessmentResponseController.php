@@ -4,6 +4,7 @@ namespace App\Modules\Assessments\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Assessments\Http\Requests\StoreAssessmentResponseRequest;
+use App\Modules\Assessments\Http\Requests\UpdateAssessmentResponseRequest;
 use App\Modules\Assessments\Http\Resources\AssessmentResponseResource;
 use App\Modules\Assessments\Models\AssessmentResponse;
 use App\Modules\ServiceUsers\Models\ServiceUser;
@@ -50,5 +51,36 @@ class AssessmentResponseController extends Controller
         );
 
         return new AssessmentResponseResource($assessmentResponse->load(['template', 'completedBy']));
+    }
+
+    public function update(UpdateAssessmentResponseRequest $request, AssessmentResponse $assessmentResponse)
+    {
+        abort_unless($request->user()->ownsTenant($assessmentResponse->tenant_id), 403);
+
+        $attributes = $request->validated();
+
+        if (($attributes['status'] ?? null) === 'completed' && $assessmentResponse->status !== 'completed') {
+            $attributes['completed_at'] = now();
+        }
+
+        $assessmentResponse->update($attributes);
+
+        return new AssessmentResponseResource($assessmentResponse->fresh()->load(['template', 'completedBy']));
+    }
+
+    /**
+     * Hides a response from the active Assessments list without losing it —
+     * these can be produced in a compliance review, so a mis-recorded entry
+     * gets archived rather than deleted outright.
+     */
+    public function archive(Request $request, AssessmentResponse $assessmentResponse)
+    {
+        abort_unless($request->user()->ownsTenant($assessmentResponse->tenant_id), 403);
+
+        $validated = $request->validate(['archived' => ['required', 'boolean']]);
+
+        $assessmentResponse->update(['archived_at' => $validated['archived'] ? now() : null]);
+
+        return new AssessmentResponseResource($assessmentResponse->fresh()->load(['template', 'completedBy']));
     }
 }

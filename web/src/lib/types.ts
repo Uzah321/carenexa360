@@ -235,6 +235,7 @@ export interface AssessmentResponse {
   completed_by_name?: string | null;
   completed_at: string | null;
   status: "draft" | "completed";
+  archived_at: string | null;
 }
 
 export interface CareDocument {
@@ -457,6 +458,7 @@ export interface Medication {
   prn_instructions: string | null;
   is_controlled_drug: boolean;
   status: "active" | "discontinued";
+  archived_at: string | null;
   created_by: number | null;
   administrations?: MedicationAdministration[];
   created_at: string;
@@ -504,6 +506,7 @@ export interface Observation {
   recorded_by_name?: string | null;
   recorded_at: string;
   notes: string | null;
+  archived_at: string | null;
   alerts?: ClinicalAlert[];
   created_at: string;
 }
@@ -552,6 +555,7 @@ export interface Incident {
   reviewed_by: number | null;
   reviewed_at: string | null;
   closed_at: string | null;
+  archived_at: string | null;
   created_at: string;
 }
 

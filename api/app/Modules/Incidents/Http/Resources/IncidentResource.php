@@ -30,6 +30,7 @@ class IncidentResource extends JsonResource
             'reviewed_by' => $this->reviewed_by,
             'reviewed_at' => $this->reviewed_at,
             'closed_at' => $this->closed_at,
+            'archived_at' => $this->archived_at,
             'created_at' => $this->created_at,
         ];
     }

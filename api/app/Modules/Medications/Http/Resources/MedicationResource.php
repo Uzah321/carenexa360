@@ -28,6 +28,7 @@ class MedicationResource extends JsonResource
             'prn_instructions' => $this->prn_instructions,
             'is_controlled_drug' => $this->is_controlled_drug,
             'status' => $this->status,
+            'archived_at' => $this->archived_at,
             'created_by' => $this->created_by,
             'administrations' => MedicationAdministrationResource::collection($this->whenLoaded('administrations')),
             'created_at' => $this->created_at,

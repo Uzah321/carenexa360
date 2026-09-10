@@ -71,3 +71,44 @@ export function useCreateAssessmentResponse(serviceUserId: number) {
     },
   });
 }
+
+export interface UpdateResponseInput {
+  answers?: Record<string, unknown>;
+  status?: "draft" | "completed";
+}
+
+export function useUpdateAssessmentResponse(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateResponseInput & { id: number }) => {
+      const { data } = await apiClient.patch<{ data: AssessmentResponse }>(
+        `/assessment-responses/${id}`,
+        input,
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["service-users", serviceUserId, "assessment-responses"],
+      });
+    },
+  });
+}
+
+export function useArchiveAssessmentResponse(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      const { data } = await apiClient.patch<{ data: AssessmentResponse }>(
+        `/assessment-responses/${id}/archive`,
+        { archived },
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["service-users", serviceUserId, "assessment-responses"],
+      });
+    },
+  });
+}

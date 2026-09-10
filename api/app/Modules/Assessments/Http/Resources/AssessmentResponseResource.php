@@ -19,6 +19,7 @@ class AssessmentResponseResource extends JsonResource
             'completed_by_name' => $this->whenLoaded('completedBy', fn () => $this->completedBy?->name),
             'completed_at' => $this->completed_at,
             'status' => $this->status,
+            'archived_at' => $this->archived_at,
         ];
     }
 }

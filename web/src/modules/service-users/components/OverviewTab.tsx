@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -13,6 +13,7 @@ import {
   Modal,
   Select,
   StatusBadge,
+  TagInput,
   Textarea,
   type Column,
 } from "../../../design-system";
@@ -115,68 +116,519 @@ function HospitalDocuments({ serviceUserId }: { serviceUserId: number }) {
 export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader>Personal Details</CardHeader>
-        <CardBody>
-          <dl>
-            <InfoRow label="Preferred name" value={serviceUser.preferred_name} />
-            <InfoRow label="Date of birth" value={serviceUser.date_of_birth} />
-            <InfoRow label="Gender" value={serviceUser.gender} />
-            <InfoRow label="Language" value={serviceUser.language} />
-            <InfoRow label="Phone" value={serviceUser.phone} />
-            <InfoRow label="Email" value={serviceUser.email} />
-            <InfoRow label="Address" value={serviceUser.address} />
-            <InfoRow label="Funding source" value={serviceUser.funding_source} />
-          </dl>
-        </CardBody>
-      </Card>
+      <PersonalDetailsCard serviceUser={serviceUser} />
 
-      <Card>
-        <CardHeader>Medical Summary</CardHeader>
-        <CardBody>
-          <TagList label="Allergies" items={serviceUser.allergies} />
-          <TagList label="Diagnoses" items={serviceUser.diagnoses} />
-          <TagList label="Medical conditions" items={serviceUser.medical_conditions} />
-          <TagList label="Disabilities" items={serviceUser.disabilities} />
-        </CardBody>
-      </Card>
+      <MedicalSummaryCard serviceUser={serviceUser} />
 
-      <Card>
-        <CardHeader>Hospital Records</CardHeader>
-        <CardBody>
-          <dl>
-            <InfoRow label="Referring hospital" value={serviceUser.referring_hospital} />
-            <InfoRow label="Hospital record number" value={serviceUser.hospital_record_number} />
-            <InfoRow label="Discharge date" value={serviceUser.discharge_date} />
-          </dl>
-          <div className="border-b border-line py-2">
-            <div className="mb-1 text-sm text-inksoft">Discharge summary</div>
-            <p className="text-sm text-ink">{serviceUser.discharge_summary || "None recorded"}</p>
-          </div>
-          <HospitalDocuments serviceUserId={serviceUser.id} />
-        </CardBody>
-      </Card>
+      <HospitalRecordsCard serviceUser={serviceUser} />
 
-      <Card>
-        <CardHeader>Care Notes</CardHeader>
-        <CardBody>
-          <dl>
-            <InfoRow label="Mobility" value={serviceUser.mobility_notes} />
-            <InfoRow label="Communication needs" value={serviceUser.communication_needs} />
-            <InfoRow label="Dietary needs" value={serviceUser.dietary_needs} />
-            <InfoRow label="Cultural preferences" value={serviceUser.cultural_preferences} />
-            <InfoRow label="Religious requirements" value={serviceUser.religious_requirements} />
-            <InfoRow label="Behavioural considerations" value={serviceUser.behavioural_considerations} />
-            <InfoRow label="Preferred routines" value={serviceUser.preferred_routines} />
-            <InfoRow label="Capacity / consent notes" value={serviceUser.capacity_consent_notes} />
-          </dl>
-        </CardBody>
-      </Card>
+      <CareNotesCard serviceUser={serviceUser} />
 
       <LocationCard serviceUser={serviceUser} />
 
       <ContactsCard serviceUserId={serviceUser.id} />
     </div>
+  );
+}
+
+/** A Card with an "Edit" button in its header that opens a Modal form —
+ * shared shape for the four Overview panels below and LocationCard, so a
+ * field save always follows the same pattern: local draft state, PATCH via
+ * useUpdateServiceUser, close on success. */
+function EditableCard({
+  title,
+  formId,
+  isOpen,
+  onOpenChange,
+  isSaving,
+  error,
+  onSubmit,
+  children,
+  form,
+}: {
+  title: string;
+  formId: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  isSaving: boolean;
+  error: string | null;
+  onSubmit: (event: FormEvent) => void;
+  children: ReactNode;
+  form: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <span>{title}</span>
+          <Button variant="secondary" onClick={() => onOpenChange(true)}>
+            Edit
+          </Button>
+        </div>
+      </CardHeader>
+      <CardBody>{children}</CardBody>
+
+      <Modal
+        isOpen={isOpen}
+        onClose={() => onOpenChange(false)}
+        title={`Edit ${title}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button form={formId} type="submit" isLoading={isSaving}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <form id={formId} onSubmit={onSubmit}>
+          {error && (
+            <div className="mb-4">
+              <Alert tone="danger">{error}</Alert>
+            </div>
+          )}
+          {form}
+        </form>
+      </Modal>
+    </Card>
+  );
+}
+
+function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
+  const [draft, setDraft] = useState({
+    preferred_name: serviceUser.preferred_name ?? "",
+    date_of_birth: serviceUser.date_of_birth ?? "",
+    gender: serviceUser.gender ?? "",
+    language: serviceUser.language ?? "",
+    phone: serviceUser.phone ?? "",
+    email: serviceUser.email ?? "",
+    address: serviceUser.address ?? "",
+    funding_source: serviceUser.funding_source ?? "",
+  });
+
+  function openModal() {
+    setDraft({
+      preferred_name: serviceUser.preferred_name ?? "",
+      date_of_birth: serviceUser.date_of_birth ?? "",
+      gender: serviceUser.gender ?? "",
+      language: serviceUser.language ?? "",
+      phone: serviceUser.phone ?? "",
+      email: serviceUser.email ?? "",
+      address: serviceUser.address ?? "",
+      funding_source: serviceUser.funding_source ?? "",
+    });
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateServiceUser.mutateAsync({
+        preferred_name: draft.preferred_name || null,
+        date_of_birth: draft.date_of_birth || null,
+        gender: draft.gender || null,
+        language: draft.language || null,
+        phone: draft.phone || null,
+        email: draft.email || null,
+        address: draft.address || null,
+        funding_source: draft.funding_source || null,
+      });
+      setIsOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save these details. Please try again."));
+    }
+  }
+
+  return (
+    <EditableCard
+      title="Personal Details"
+      formId="edit-personal-details-form"
+      isOpen={isOpen}
+      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
+      isSaving={updateServiceUser.isPending}
+      error={error}
+      onSubmit={handleSave}
+      form={
+        <>
+          <FormField label="Preferred name" htmlFor="pd-preferred-name">
+            <Input
+              id="pd-preferred-name"
+              value={draft.preferred_name}
+              onChange={(e) => setDraft({ ...draft, preferred_name: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Date of birth" htmlFor="pd-dob">
+            <Input
+              id="pd-dob"
+              type="date"
+              value={draft.date_of_birth}
+              onChange={(e) => setDraft({ ...draft, date_of_birth: e.target.value })}
+            />
+          </FormField>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Gender" htmlFor="pd-gender">
+              <Input id="pd-gender" value={draft.gender} onChange={(e) => setDraft({ ...draft, gender: e.target.value })} />
+            </FormField>
+            <FormField label="Language" htmlFor="pd-language">
+              <Input
+                id="pd-language"
+                value={draft.language}
+                onChange={(e) => setDraft({ ...draft, language: e.target.value })}
+              />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Phone" htmlFor="pd-phone">
+              <Input id="pd-phone" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
+            </FormField>
+            <FormField label="Email" htmlFor="pd-email">
+              <Input
+                id="pd-email"
+                type="email"
+                value={draft.email}
+                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              />
+            </FormField>
+          </div>
+          <FormField label="Address" htmlFor="pd-address">
+            <Textarea id="pd-address" value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} />
+          </FormField>
+          <FormField label="Funding source" htmlFor="pd-funding">
+            <Input
+              id="pd-funding"
+              value={draft.funding_source}
+              onChange={(e) => setDraft({ ...draft, funding_source: e.target.value })}
+            />
+          </FormField>
+        </>
+      }
+    >
+      <dl>
+        <InfoRow label="Preferred name" value={serviceUser.preferred_name} />
+        <InfoRow label="Date of birth" value={serviceUser.date_of_birth} />
+        <InfoRow label="Gender" value={serviceUser.gender} />
+        <InfoRow label="Language" value={serviceUser.language} />
+        <InfoRow label="Phone" value={serviceUser.phone} />
+        <InfoRow label="Email" value={serviceUser.email} />
+        <InfoRow label="Address" value={serviceUser.address} />
+        <InfoRow label="Funding source" value={serviceUser.funding_source} />
+      </dl>
+    </EditableCard>
+  );
+}
+
+function MedicalSummaryCard({ serviceUser }: { serviceUser: ServiceUser }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
+  const [draft, setDraft] = useState({
+    allergies: serviceUser.allergies ?? [],
+    diagnoses: serviceUser.diagnoses ?? [],
+    medical_conditions: serviceUser.medical_conditions ?? [],
+    disabilities: serviceUser.disabilities ?? [],
+  });
+
+  function openModal() {
+    setDraft({
+      allergies: serviceUser.allergies ?? [],
+      diagnoses: serviceUser.diagnoses ?? [],
+      medical_conditions: serviceUser.medical_conditions ?? [],
+      disabilities: serviceUser.disabilities ?? [],
+    });
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateServiceUser.mutateAsync(draft);
+      setIsOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save the medical summary. Please try again."));
+    }
+  }
+
+  return (
+    <EditableCard
+      title="Medical Summary"
+      formId="edit-medical-summary-form"
+      isOpen={isOpen}
+      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
+      isSaving={updateServiceUser.isPending}
+      error={error}
+      onSubmit={handleSave}
+      form={
+        <>
+          <FormField label="Allergies" htmlFor="ms-allergies">
+            <TagInput
+              id="ms-allergies"
+              value={draft.allergies}
+              onChange={(tags) => setDraft({ ...draft, allergies: tags })}
+              placeholder="Type and press Enter…"
+            />
+          </FormField>
+          <FormField label="Diagnoses" htmlFor="ms-diagnoses">
+            <TagInput
+              id="ms-diagnoses"
+              value={draft.diagnoses}
+              onChange={(tags) => setDraft({ ...draft, diagnoses: tags })}
+              placeholder="Type and press Enter…"
+            />
+          </FormField>
+          <FormField label="Medical conditions" htmlFor="ms-conditions">
+            <TagInput
+              id="ms-conditions"
+              value={draft.medical_conditions}
+              onChange={(tags) => setDraft({ ...draft, medical_conditions: tags })}
+              placeholder="Type and press Enter…"
+            />
+          </FormField>
+          <FormField label="Disabilities" htmlFor="ms-disabilities">
+            <TagInput
+              id="ms-disabilities"
+              value={draft.disabilities}
+              onChange={(tags) => setDraft({ ...draft, disabilities: tags })}
+              placeholder="Type and press Enter…"
+            />
+          </FormField>
+        </>
+      }
+    >
+      <TagList label="Allergies" items={serviceUser.allergies} />
+      <TagList label="Diagnoses" items={serviceUser.diagnoses} />
+      <TagList label="Medical conditions" items={serviceUser.medical_conditions} />
+      <TagList label="Disabilities" items={serviceUser.disabilities} />
+    </EditableCard>
+  );
+}
+
+function HospitalRecordsCard({ serviceUser }: { serviceUser: ServiceUser }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
+  const [draft, setDraft] = useState({
+    referring_hospital: serviceUser.referring_hospital ?? "",
+    hospital_record_number: serviceUser.hospital_record_number ?? "",
+    discharge_date: serviceUser.discharge_date ?? "",
+    discharge_summary: serviceUser.discharge_summary ?? "",
+  });
+
+  function openModal() {
+    setDraft({
+      referring_hospital: serviceUser.referring_hospital ?? "",
+      hospital_record_number: serviceUser.hospital_record_number ?? "",
+      discharge_date: serviceUser.discharge_date ?? "",
+      discharge_summary: serviceUser.discharge_summary ?? "",
+    });
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateServiceUser.mutateAsync({
+        referring_hospital: draft.referring_hospital || null,
+        hospital_record_number: draft.hospital_record_number || null,
+        discharge_date: draft.discharge_date || null,
+        discharge_summary: draft.discharge_summary || null,
+      });
+      setIsOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save the hospital records. Please try again."));
+    }
+  }
+
+  return (
+    <EditableCard
+      title="Hospital Records"
+      formId="edit-hospital-records-form"
+      isOpen={isOpen}
+      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
+      isSaving={updateServiceUser.isPending}
+      error={error}
+      onSubmit={handleSave}
+      form={
+        <>
+          <FormField label="Referring hospital" htmlFor="hr-referring">
+            <Input
+              id="hr-referring"
+              value={draft.referring_hospital}
+              onChange={(e) => setDraft({ ...draft, referring_hospital: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Hospital record number" htmlFor="hr-record-number">
+            <Input
+              id="hr-record-number"
+              value={draft.hospital_record_number}
+              onChange={(e) => setDraft({ ...draft, hospital_record_number: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Discharge date" htmlFor="hr-discharge-date">
+            <Input
+              id="hr-discharge-date"
+              type="date"
+              value={draft.discharge_date}
+              onChange={(e) => setDraft({ ...draft, discharge_date: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Discharge summary" htmlFor="hr-discharge-summary">
+            <Textarea
+              id="hr-discharge-summary"
+              value={draft.discharge_summary}
+              onChange={(e) => setDraft({ ...draft, discharge_summary: e.target.value })}
+            />
+          </FormField>
+        </>
+      }
+    >
+      <dl>
+        <InfoRow label="Referring hospital" value={serviceUser.referring_hospital} />
+        <InfoRow label="Hospital record number" value={serviceUser.hospital_record_number} />
+        <InfoRow label="Discharge date" value={serviceUser.discharge_date} />
+      </dl>
+      <div className="border-b border-line py-2">
+        <div className="mb-1 text-sm text-inksoft">Discharge summary</div>
+        <p className="text-sm text-ink">{serviceUser.discharge_summary || "None recorded"}</p>
+      </div>
+      <HospitalDocuments serviceUserId={serviceUser.id} />
+    </EditableCard>
+  );
+}
+
+function CareNotesCard({ serviceUser }: { serviceUser: ServiceUser }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
+  const [draft, setDraft] = useState({
+    mobility_notes: serviceUser.mobility_notes ?? "",
+    communication_needs: serviceUser.communication_needs ?? "",
+    dietary_needs: serviceUser.dietary_needs ?? "",
+    cultural_preferences: serviceUser.cultural_preferences ?? "",
+    religious_requirements: serviceUser.religious_requirements ?? "",
+    behavioural_considerations: serviceUser.behavioural_considerations ?? "",
+    preferred_routines: serviceUser.preferred_routines ?? "",
+    capacity_consent_notes: serviceUser.capacity_consent_notes ?? "",
+  });
+
+  function openModal() {
+    setDraft({
+      mobility_notes: serviceUser.mobility_notes ?? "",
+      communication_needs: serviceUser.communication_needs ?? "",
+      dietary_needs: serviceUser.dietary_needs ?? "",
+      cultural_preferences: serviceUser.cultural_preferences ?? "",
+      religious_requirements: serviceUser.religious_requirements ?? "",
+      behavioural_considerations: serviceUser.behavioural_considerations ?? "",
+      preferred_routines: serviceUser.preferred_routines ?? "",
+      capacity_consent_notes: serviceUser.capacity_consent_notes ?? "",
+    });
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateServiceUser.mutateAsync({
+        mobility_notes: draft.mobility_notes || null,
+        communication_needs: draft.communication_needs || null,
+        dietary_needs: draft.dietary_needs || null,
+        cultural_preferences: draft.cultural_preferences || null,
+        religious_requirements: draft.religious_requirements || null,
+        behavioural_considerations: draft.behavioural_considerations || null,
+        preferred_routines: draft.preferred_routines || null,
+        capacity_consent_notes: draft.capacity_consent_notes || null,
+      });
+      setIsOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save these care notes. Please try again."));
+    }
+  }
+
+  return (
+    <EditableCard
+      title="Care Notes"
+      formId="edit-care-notes-form"
+      isOpen={isOpen}
+      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
+      isSaving={updateServiceUser.isPending}
+      error={error}
+      onSubmit={handleSave}
+      form={
+        <>
+          <FormField label="Mobility" htmlFor="cn-mobility">
+            <Textarea id="cn-mobility" value={draft.mobility_notes} onChange={(e) => setDraft({ ...draft, mobility_notes: e.target.value })} />
+          </FormField>
+          <FormField label="Communication needs" htmlFor="cn-communication">
+            <Textarea
+              id="cn-communication"
+              value={draft.communication_needs}
+              onChange={(e) => setDraft({ ...draft, communication_needs: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Dietary needs" htmlFor="cn-dietary">
+            <Textarea id="cn-dietary" value={draft.dietary_needs} onChange={(e) => setDraft({ ...draft, dietary_needs: e.target.value })} />
+          </FormField>
+          <FormField label="Cultural preferences" htmlFor="cn-cultural">
+            <Textarea
+              id="cn-cultural"
+              value={draft.cultural_preferences}
+              onChange={(e) => setDraft({ ...draft, cultural_preferences: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Religious requirements" htmlFor="cn-religious">
+            <Textarea
+              id="cn-religious"
+              value={draft.religious_requirements}
+              onChange={(e) => setDraft({ ...draft, religious_requirements: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Behavioural considerations" htmlFor="cn-behavioural">
+            <Textarea
+              id="cn-behavioural"
+              value={draft.behavioural_considerations}
+              onChange={(e) => setDraft({ ...draft, behavioural_considerations: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Preferred routines" htmlFor="cn-routines">
+            <Textarea
+              id="cn-routines"
+              value={draft.preferred_routines}
+              onChange={(e) => setDraft({ ...draft, preferred_routines: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Capacity / consent notes" htmlFor="cn-capacity">
+            <Textarea
+              id="cn-capacity"
+              value={draft.capacity_consent_notes}
+              onChange={(e) => setDraft({ ...draft, capacity_consent_notes: e.target.value })}
+            />
+          </FormField>
+        </>
+      }
+    >
+      <dl>
+        <InfoRow label="Mobility" value={serviceUser.mobility_notes} />
+        <InfoRow label="Communication needs" value={serviceUser.communication_needs} />
+        <InfoRow label="Dietary needs" value={serviceUser.dietary_needs} />
+        <InfoRow label="Cultural preferences" value={serviceUser.cultural_preferences} />
+        <InfoRow label="Religious requirements" value={serviceUser.religious_requirements} />
+        <InfoRow label="Behavioural considerations" value={serviceUser.behavioural_considerations} />
+        <InfoRow label="Preferred routines" value={serviceUser.preferred_routines} />
+        <InfoRow label="Capacity / consent notes" value={serviceUser.capacity_consent_notes} />
+      </dl>
+    </EditableCard>
   );
 }
 

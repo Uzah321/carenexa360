@@ -58,4 +58,21 @@ class MedicationController extends Controller
 
         return new MedicationResource($medication->fresh());
     }
+
+    /**
+     * Hides a medication from the active list without losing its history —
+     * administration records reference it, so it's archived rather than
+     * deleted outright. Distinct from `status` (active/discontinued), which
+     * is a clinical state, not a visibility one.
+     */
+    public function archive(Request $request, Medication $medication)
+    {
+        abort_unless($request->user()->ownsTenant($medication->tenant_id), 403);
+
+        $validated = $request->validate(['archived' => ['required', 'boolean']]);
+
+        $medication->update(['archived_at' => $validated['archived'] ? now() : null]);
+
+        return new MedicationResource($medication->fresh());
+    }
 }

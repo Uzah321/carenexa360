@@ -37,6 +37,7 @@ class Medication extends Model
         'is_controlled_drug',
         'status',
         'created_by',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -47,6 +48,7 @@ class Medication extends Model
             'end_date' => 'date',
             'is_prn' => 'boolean',
             'is_controlled_drug' => 'boolean',
+            'archived_at' => 'datetime',
         ];
     }
 

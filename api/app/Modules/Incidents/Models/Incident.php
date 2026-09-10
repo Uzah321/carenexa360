@@ -46,6 +46,7 @@ class Incident extends Model
         'reviewed_by',
         'reviewed_at',
         'closed_at',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -53,6 +54,7 @@ class Incident extends Model
         return [
             'reviewed_at' => 'datetime',
             'closed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 

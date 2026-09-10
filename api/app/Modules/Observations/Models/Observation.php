@@ -44,6 +44,7 @@ class Observation extends Model
         'recorded_by',
         'recorded_at',
         'notes',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class Observation extends Model
         return [
             'value' => 'array',
             'recorded_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 

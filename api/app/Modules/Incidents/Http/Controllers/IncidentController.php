@@ -66,4 +66,21 @@ class IncidentController extends Controller
 
         return new IncidentResource($incident->fresh()->load(['serviceUser', 'reportedBy', 'assignedTo', 'reviewedBy']));
     }
+
+    /**
+     * Hides an incident from the active list without losing it — these can
+     * be produced in a CQC/safeguarding audit, so a mis-logged entry gets
+     * archived rather than deleted outright. Distinct from `status`, which
+     * tracks the investigation workflow, not visibility.
+     */
+    public function archive(Request $request, Incident $incident)
+    {
+        abort_unless($request->user()->ownsTenant($incident->tenant_id), 403);
+
+        $validated = $request->validate(['archived' => ['required', 'boolean']]);
+
+        $incident->update(['archived_at' => $validated['archived'] ? now() : null]);
+
+        return new IncidentResource($incident->fresh()->load(['serviceUser', 'reportedBy', 'assignedTo', 'reviewedBy']));
+    }
 }

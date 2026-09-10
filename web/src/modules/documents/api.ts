@@ -50,6 +50,18 @@ export function useUploadDocument(serviceUserId: number) {
   });
 }
 
+export function useDeleteDocument(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (documentId: number) => {
+      await apiClient.delete(`/documents/${documentId}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "documents"] });
+    },
+  });
+}
+
 export function useStaffDocuments(staffId: number) {
   return useQuery({
     queryKey: ["staff", staffId, "documents"],

@@ -49,6 +49,41 @@ export function useCreateMedication(serviceUserId: number) {
   });
 }
 
+export interface UpdateMedicationInput {
+  dose?: string;
+  frequency?: string;
+  schedule?: string[];
+  end_date?: string | null;
+  instructions?: string | null;
+  status?: "active" | "discontinued";
+}
+
+export function useUpdateMedication(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateMedicationInput & { id: number }) => {
+      const { data } = await apiClient.patch<{ data: Medication }>(`/medications/${id}`, input);
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "medications"] });
+    },
+  });
+}
+
+export function useArchiveMedication(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      const { data } = await apiClient.patch<{ data: Medication }>(`/medications/${id}/archive`, { archived });
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "medications"] });
+    },
+  });
+}
+
 export function useMedicationAdministrations(medicationId: number | null) {
   return useQuery({
     queryKey: ["medications", medicationId, "administrations"],

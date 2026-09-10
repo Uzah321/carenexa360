@@ -41,6 +41,39 @@ export function useCreateObservation(serviceUserId: number) {
   });
 }
 
+export interface UpdateObservationInput {
+  value?: Record<string, number | string>;
+  unit?: string | null;
+  recorded_at?: string;
+  notes?: string | null;
+}
+
+export function useUpdateObservation(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UpdateObservationInput & { id: number }) => {
+      const { data } = await apiClient.patch<{ data: Observation }>(`/observations/${id}`, input);
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "observations"] });
+    },
+  });
+}
+
+export function useArchiveObservation(serviceUserId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      const { data } = await apiClient.patch<{ data: Observation }>(`/observations/${id}/archive`, { archived });
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "observations"] });
+    },
+  });
+}
+
 export function useClinicalAlerts(serviceUserId: number) {
   return useQuery({
     queryKey: ["service-users", serviceUserId, "clinical-alerts"],

@@ -124,6 +124,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/assessment-templates', [AssessmentTemplateController::class, 'index']);
             Route::post('/assessment-templates', [AssessmentTemplateController::class, 'store']);
             Route::get('/assessment-responses/{assessmentResponse}', [AssessmentResponseController::class, 'show']);
+            Route::patch('/assessment-responses/{assessmentResponse}', [AssessmentResponseController::class, 'update']);
+            Route::patch('/assessment-responses/{assessmentResponse}/archive', [AssessmentResponseController::class, 'archive']);
 
             Route::get('/documents/{document}/download', [DocumentController::class, 'download']);
             Route::delete('/documents/{document}', [DocumentController::class, 'destroy']);
@@ -134,11 +136,14 @@ Route::prefix('v1')->group(function () {
             Route::prefix('medications')->group(function () {
                 Route::get('/{medication}', [MedicationController::class, 'show']);
                 Route::patch('/{medication}', [MedicationController::class, 'update']);
+                Route::patch('/{medication}/archive', [MedicationController::class, 'archive']);
                 Route::get('/{medication}/administrations', [MedicationAdministrationController::class, 'index']);
                 Route::post('/{medication}/administrations', [MedicationAdministrationController::class, 'store']);
             });
 
             Route::get('/observations/{observation}', [ObservationController::class, 'show']);
+            Route::patch('/observations/{observation}', [ObservationController::class, 'update']);
+            Route::patch('/observations/{observation}/archive', [ObservationController::class, 'archive']);
 
             Route::post('/clinical-alerts/{alert}/acknowledge', [ClinicalAlertController::class, 'acknowledge']);
 
@@ -147,6 +152,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/', [IncidentController::class, 'store']);
                 Route::get('/{incident}', [IncidentController::class, 'show']);
                 Route::patch('/{incident}', [IncidentController::class, 'update']);
+                Route::patch('/{incident}/archive', [IncidentController::class, 'archive']);
             });
 
             Route::prefix('safeguarding-cases')->group(function () {

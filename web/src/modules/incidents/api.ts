@@ -77,3 +77,16 @@ export function useUpdateIncident(incidentId: number) {
     },
   });
 }
+
+export function useArchiveIncident() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: number; archived: boolean }) => {
+      const { data } = await apiClient.patch<{ data: Incident }>(`/incidents/${id}/archive`, { archived });
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
+    },
+  });
+}
