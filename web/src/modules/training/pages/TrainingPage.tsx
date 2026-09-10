@@ -57,7 +57,7 @@ function recordColumns(showUser: boolean): Column<TrainingRecord>[] {
 function AllStaffTrainingSection() {
   const [statusFilter, setStatusFilter] = useState<TrainingRecordStatus | "">("");
   const { data: records, isLoading } = useTrainingRecords({ status: statusFilter || undefined });
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
   const { data: courses } = useTrainingCourses();
   const createRecord = useCreateTrainingRecord();
   const createCourse = useCreateTrainingCourse();

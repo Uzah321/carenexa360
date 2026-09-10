@@ -62,7 +62,7 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
   const createMedication = useCreateMedication(serviceUserId);
   const updateMedication = useUpdateMedication(serviceUserId);
   const archiveMedication = useArchiveMedication(serviceUserId);
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<CreateMedicationInput>(EMPTY_FORM);

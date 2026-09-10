@@ -30,7 +30,7 @@ function errorMessage(err: unknown): string {
 export function EditVisitModal({ visit, onClose }: { visit: Visit | null; onClose: () => void }) {
   const [editForm, setEditForm] = useState<UpdateVisitInput>({});
   const [error, setError] = useState<string | null>(null);
-  const { data: staff } = useStaff(1, 100);
+  const { data: staff } = useStaff(1, 500);
   const updateVisit = useUpdateVisit(visit?.id ?? 0);
 
   useEffect(() => {

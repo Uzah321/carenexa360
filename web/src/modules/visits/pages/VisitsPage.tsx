@@ -68,7 +68,7 @@ export function VisitsPage() {
 
   const { data, isLoading } = useVisits({ date: date || undefined, page });
   const { data: serviceUsers } = useServiceUsers(1);
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
   const createVisit = useCreateVisit();
 
   const [editingVisit, setEditingVisit] = useState<Visit | null>(null);

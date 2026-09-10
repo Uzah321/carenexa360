@@ -46,7 +46,7 @@ export function RosteringPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useShifts({ date: date || undefined });
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
   const createShift = useCreateShift();
 
   async function handleCreate(event: FormEvent) {

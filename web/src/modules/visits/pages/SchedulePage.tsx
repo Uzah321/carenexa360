@@ -110,7 +110,7 @@ export function SchedulePage() {
   const suppressChipClickRef = useRef(false);
 
   const { data: branches } = useBranches(user?.tenant_id ?? 0);
-  const { data: staff } = useStaff(1, 100);
+  const { data: staff } = useStaff(1, 500);
   const { data: visitsData } = useVisits({ date, per_page: 100 });
   const { data: serviceUsersData } = useServiceUsers(1, { status: "active", perPage: 200 });
   const { data: liveMapData } = useLiveMap(branchId, canViewLiveMap);

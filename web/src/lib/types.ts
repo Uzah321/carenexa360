@@ -831,6 +831,7 @@ export const VISIT_DELIVERY_ROLES = [
   "Nurse",
   "Care Coordinator",
   "Care Manager",
+  "Branch Manager",
 ] as const;
 
 export function deliversVisits(roles: readonly string[]): boolean {

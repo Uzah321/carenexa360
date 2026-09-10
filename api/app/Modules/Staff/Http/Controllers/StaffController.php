@@ -20,13 +20,18 @@ class StaffController extends Controller
      * gated by StaffRoles) — this list backs carer-assignment and
      * witness-selection dropdowns across the app. StaffResource hides the
      * HR-sensitive fields from anyone outside StaffRoles instead.
+     *
+     * The cap was 100 until a tenant with 18 staff started silently losing
+     * people off assignment dropdowns that call this with no `per_page` at
+     * all (the default was only 15) — those callers want "every staff
+     * member", not a paginated page, so the ceiling needs real headroom.
      */
     public function index(Request $request)
     {
         return StaffResource::collection(
             StaffProfile::with('user')
                 ->orderByDesc('created_at')
-                ->paginate(max(1, min((int) $request->query('per_page', 15), 100)))
+                ->paginate(max(1, min((int) $request->query('per_page', 15), 500)))
         );
     }
 

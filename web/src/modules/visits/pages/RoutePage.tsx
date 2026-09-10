@@ -38,7 +38,7 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 export function RoutePage() {
   const [carerId, setCarerId] = useState<number | "">("");
   const [date, setDate] = useState(todayIso);
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
   const { data: routeData, isLoading } = useRoute(carerId || null, date);
 
   const stops = routeData?.stops ?? [];

@@ -213,7 +213,7 @@ export function TodayPage() {
 
   const { data, isLoading } = useToday(date);
   const { data: serviceUsers } = useServiceUsers(1);
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
   const createVisit = useCreateVisit();
 
   const isToday = date === todayIso();

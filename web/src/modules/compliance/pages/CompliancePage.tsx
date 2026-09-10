@@ -77,7 +77,7 @@ function ComplianceRequirementFormFields({
   setForm: (form: CreateComplianceRequirementInput) => void;
   idPrefix: string;
 }) {
-  const { data: staff } = useStaff(1);
+  const { data: staff } = useStaff(1, 500);
 
   return (
     <>

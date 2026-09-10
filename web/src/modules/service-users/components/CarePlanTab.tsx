@@ -424,7 +424,7 @@ function HistoryTab({ plans, viewingId, onSelect }: { plans: CarePlan[]; viewing
 
 export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
   const { data: plans, isLoading } = useCarePlans(serviceUserId);
-  const { data: staff } = useStaff(1, 100);
+  const { data: staff } = useStaff(1, 500);
   const createCarePlan = useCreateCarePlan(serviceUserId);
 
   const [viewingId, setViewingId] = useState<number | null>(null);
