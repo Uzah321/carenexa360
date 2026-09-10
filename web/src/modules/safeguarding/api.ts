@@ -61,3 +61,21 @@ export function useUpdateSafeguardingCase(caseId: number) {
     },
   });
 }
+
+/** A single shared mutation for one-click status changes from the row's
+ * kebab menu — same shape as useUpdateIncidentStatus, so a row doesn't need
+ * to open the full case drawer just to advance its status. */
+export function useUpdateSafeguardingCaseStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: SafeguardingCaseStatus }) => {
+      const { data } = await apiClient.patch<{ data: SafeguardingCase }>(`/safeguarding-cases/${id}`, {
+        status,
+      });
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["safeguarding-cases"] });
+    },
+  });
+}

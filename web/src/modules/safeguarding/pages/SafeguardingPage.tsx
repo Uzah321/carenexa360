@@ -11,6 +11,7 @@ import {
   FormField,
   Input,
   Modal,
+  RowActionsMenu,
   Select,
   StatusBadge,
   Textarea,
@@ -19,7 +20,12 @@ import {
 import { useAuth } from "../../../lib/auth-context";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { useServiceUsers } from "../../service-users/api";
-import { useCreateSafeguardingCase, useSafeguardingCases, useUpdateSafeguardingCase } from "../api";
+import {
+  useCreateSafeguardingCase,
+  useSafeguardingCases,
+  useUpdateSafeguardingCase,
+  useUpdateSafeguardingCaseStatus,
+} from "../api";
 import {
   SAFEGUARDING_CASE_STATUSES,
   SAFEGUARDING_ROLES,
@@ -33,6 +39,12 @@ const STATUS_TONE: Record<SafeguardingCaseStatus, "info" | "warning" | "success"
   actions_taken: "warning",
   closed: "success",
 };
+
+// SAFEGUARDING_CASE_STATUSES is already in forward-workflow order, so "the
+// statuses this case can move to" is just everything after its current one.
+function remainingStatuses(current: SafeguardingCaseStatus): SafeguardingCaseStatus[] {
+  return SAFEGUARDING_CASE_STATUSES.slice(SAFEGUARDING_CASE_STATUSES.indexOf(current) + 1);
+}
 
 function SafeguardingCaseDetail({ safeguardingCase, onClose }: { safeguardingCase: SafeguardingCase; onClose: () => void }) {
   const updateCase = useUpdateSafeguardingCase(safeguardingCase.id);
@@ -113,6 +125,7 @@ export function SafeguardingPage() {
   const { data, isLoading } = useSafeguardingCases();
   const { data: serviceUsers } = useServiceUsers(1);
   const createCase = useCreateSafeguardingCase();
+  const updateStatus = useUpdateSafeguardingCaseStatus();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeCase, setActiveCase] = useState<SafeguardingCase | null>(null);
@@ -179,14 +192,19 @@ export function SafeguardingPage() {
     {
       key: "actions",
       header: "",
+      className: "w-12 text-right",
       render: (row) => (
-        <button
-          type="button"
-          className="text-sm font-medium text-teal hover:text-teal/90"
-          onClick={() => setActiveCase(row)}
-        >
-          View
-        </button>
+        <RowActionsMenu
+          actions={[
+            { label: "View", onClick: () => setActiveCase(row) },
+            ...remainingStatuses(row.status).map((status) => ({
+              label: `Mark as ${status.replaceAll("_", " ")}`,
+              tone: status === "closed" ? ("danger" as const) : ("default" as const),
+              onClick: () => updateStatus.mutate({ id: row.id, status }),
+            })),
+          ]}
+          label="Case actions"
+        />
       ),
     },
   ];
