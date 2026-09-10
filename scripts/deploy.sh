@@ -20,6 +20,23 @@
 # it replaces is kept as <name>.replaced-<timestamp> instead of being
 # deleted, which is what `rollback` restores; only backups beyond
 # KEEP_BACKUPS are pruned.
+#
+# Troubleshooting:
+#   - "bash: scripts/deploy.sh: No such file or directory" run on the VPS
+#     itself: this script runs on your local machine (git history, Node),
+#     not the server — there's no repo checked out there. SSH out to the
+#     server is something *this script* does for you.
+#   - `npm ci`/`npm run build` fails with EPERM/unlink errors under
+#     web/node_modules (e.g. tailwindcss-oxide's .node binary) on Windows:
+#     a leftover `npm run dev` (Vite) process from local development is
+#     holding a file lock on it. Close that dev server (on Windows, check
+#     Task Manager / `tasklist` for a node.exe running .../vite/bin/vite.js)
+#     and re-run. This bit the first deploy after the Sept 2026 CRUD/archive
+#     feature — see the check in deploy_web() below, which now fails fast
+#     with this same hint instead of a bare npm stack trace.
+#   - `tar: ... time stamp ... is N s in the future` warnings while shipping
+#     the frontend build: harmless clock skew between this machine and the
+#     server: tar just warns, it isn't a failure.
 
 set -euo pipefail
 
@@ -80,7 +97,14 @@ prune_backups() {
 
 deploy_web() {
   echo "==> Building frontend"
-  (cd "$REPO_ROOT/web" && npm ci && npm run build)
+  if ! (cd "$REPO_ROOT/web" && npm ci && npm run build); then
+    echo "" >&2
+    echo "Frontend build failed. If npm reported EPERM/unlink errors under" >&2
+    echo "node_modules, a leftover 'npm run dev' (Vite) process is holding a" >&2
+    echo "file lock on it — stop it (Windows: Task Manager for a node.exe" >&2
+    echo "running .../vite/bin/vite.js) and re-run this script." >&2
+    exit 1
+  fi
   test -f "$REPO_ROOT/web/dist/index.html" || { echo "web/dist/index.html missing after build" >&2; exit 1; }
 
   echo "==> Shipping frontend build to server"
