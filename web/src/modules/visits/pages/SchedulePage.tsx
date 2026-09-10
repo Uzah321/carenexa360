@@ -452,7 +452,7 @@ export function SchedulePage() {
             setEditingVisit(visit);
           }
         }}
-        title={`${visit.service_user_name ?? "—"} · ${visit.start_time}–${visit.end_time} · ${visit.status.replaceAll("_", " ")} · drag to reschedule`}
+        title={`${visit.service_user_name ?? "—"} with ${visit.carer_name ?? "Unassigned"} · ${visit.start_time}–${visit.end_time} · ${visit.status.replaceAll("_", " ")} · drag to reschedule`}
         className={`group absolute top-1/2 flex -translate-y-1/2 cursor-grab items-center overflow-hidden rounded-lg border px-2 text-left text-xs font-medium shadow-sm transition-colors duration-150 hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal active:cursor-grabbing ${style.bg} ${style.text} ${style.border} ${
           visit.status === "cancelled" ? "border-dashed line-through decoration-1" : ""
         } ${carerDrag ? "ring-2 ring-teal/50" : ""}`}
@@ -463,7 +463,15 @@ export function SchedulePage() {
           touchAction: "none",
         }}
       >
-        <span className="truncate">{visit.service_user_name ?? "—"}</span>
+        {/* Each row already names its own axis (the client in "By client",
+            the carer in "By carer") — showing that same name again on every
+            block is redundant at best and, for an unassigned visit, reads
+            like the client was assigned to themselves. Show the *other*
+            axis instead, so the block always tells you something the row
+            header doesn't. */}
+        <span className="truncate">
+          {view === "client" ? (visit.carer_name ?? "Unassigned") : (visit.service_user_name ?? "—")}
+        </span>
         <div
           onPointerDown={(e) => startDrag(e, visit, "resize", rowIndex)}
           className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-current opacity-0 group-hover:opacity-30"
