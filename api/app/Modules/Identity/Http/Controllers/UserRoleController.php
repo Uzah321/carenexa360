@@ -9,7 +9,9 @@ use App\Modules\Identity\Http\Requests\UpdateUserRoleRequest;
 use App\Modules\Identity\Http\Resources\UserRoleResource;
 use App\Modules\Identity\Support\AdministrationRoles;
 use App\Modules\Identity\Support\DefaultRoles;
+use App\Modules\Staff\Models\StaffProfile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -31,17 +33,34 @@ class UserRoleController extends Controller
     {
         $tenantId = $request->user()->tenant_id;
 
-        $user = User::create([
-            'tenant_id' => $tenantId,
-            'name' => $request->validated('name'),
-            'email' => $request->validated('email'),
-            'password' => $request->validated('password'),
-        ]);
+        $user = DB::transaction(function () use ($request, $tenantId) {
+            $user = User::create([
+                'tenant_id' => $tenantId,
+                'name' => $request->validated('name'),
+                'email' => $request->validated('email'),
+                'password' => $request->validated('password'),
+            ]);
 
-        $role = Role::where('name', $request->validated('role'))
-            ->where('tenant_id', $tenantId)
-            ->firstOrFail();
-        $user->assignRole($role);
+            $role = Role::where('name', $request->validated('role'))
+                ->where('tenant_id', $tenantId)
+                ->firstOrFail();
+            $user->assignRole($role);
+
+            // Every "who can this be assigned to" list in the app (Schedule,
+            // visit reassignment, witness selection, the Staff directory
+            // itself) reads from StaffProfile, not User+role directly — a
+            // user created here without one is invisible everywhere despite
+            // having a real role, which is exactly what happened before this
+            // fix. Family Member accounts never reach this endpoint (index()
+            // excludes them), so every user created here is staff.
+            StaffProfile::create([
+                'tenant_id' => $tenantId,
+                'user_id' => $user->id,
+                'employment_status' => 'active',
+            ]);
+
+            return $user;
+        });
 
         return (new UserRoleResource($user->load(['roles', 'staffProfile'])))
             ->response()
