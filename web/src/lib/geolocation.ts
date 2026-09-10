@@ -29,7 +29,7 @@ export function getCurrentPosition(): Promise<GeolocationPosition> {
     navigator.geolocation.getCurrentPosition(
       resolve,
       (error) => reject(new Error(describeGeolocationError(error))),
-      { enableHighAccuracy: true },
+      { enableHighAccuracy: true, timeout: 15000 },
     );
   });
 }

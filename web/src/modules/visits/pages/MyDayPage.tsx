@@ -29,6 +29,12 @@ export function MyDayPage() {
   const checkInDuty = useCheckInDuty();
   const checkOutDuty = useCheckOutDuty();
   const [dutyError, setDutyError] = useState<string | null>(null);
+  // Covers the geolocation lookup that precedes each mutation too — without
+  // this, a slow/stalled GPS fix (no fix indoors, or a stale PWA watch after
+  // being backgrounded) leaves the button showing no spinner and no error
+  // for as long as the browser takes to answer, which reads as "nothing
+  // happens" when the carer taps it.
+  const [isAcquiringLocation, setIsAcquiringLocation] = useState(false);
 
   const visits = data?.data ?? [];
   const activeVisit = visits.find((v) => v.status === "in_progress");
@@ -37,14 +43,17 @@ export function MyDayPage() {
 
   async function handleCheckIn() {
     setDutyError(null);
+    setIsAcquiringLocation(true);
     try {
       const position = await getCurrentPosition();
+      setIsAcquiringLocation(false);
       await checkInDuty.mutateAsync({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
       });
     } catch (err) {
+      setIsAcquiringLocation(false);
       setDutyError(err instanceof Error ? err.message : "Could not check in for work.");
     }
   }
@@ -52,12 +61,14 @@ export function MyDayPage() {
   async function handleCheckOut() {
     if (!dutyPeriod) return;
     setDutyError(null);
+    setIsAcquiringLocation(true);
     try {
       // Prefer the position already flowing from the active location watch
       // over a fresh one-shot request — requesting a new fix while a watch
       // is running can hang on some browsers, and the watch's fix is at
       // most ~25s old anyway.
       const coords = sharing.lastKnownPosition ?? (await getCurrentPosition()).coords;
+      setIsAcquiringLocation(false);
       await checkOutDuty.mutateAsync({
         id: dutyPeriod.id,
         latitude: coords.latitude,
@@ -65,6 +76,7 @@ export function MyDayPage() {
         accuracy: coords.accuracy,
       });
     } catch (err) {
+      setIsAcquiringLocation(false);
       setDutyError(err instanceof Error ? err.message : "Could not check out.");
     }
   }
@@ -107,7 +119,7 @@ export function MyDayPage() {
               variant="secondary"
               className="mt-3 w-full"
               onClick={handleCheckOut}
-              isLoading={checkOutDuty.isPending}
+              isLoading={isAcquiringLocation || checkOutDuty.isPending}
             >
               Check Out
             </Button>
@@ -120,7 +132,11 @@ export function MyDayPage() {
               Check in when you arrive at work. You need to be checked in before you can
               start a visit, and it shares your location for the day.
             </p>
-            <Button className="mt-3 w-full" onClick={handleCheckIn} isLoading={checkInDuty.isPending}>
+            <Button
+              className="mt-3 w-full"
+              onClick={handleCheckIn}
+              isLoading={isAcquiringLocation || checkInDuty.isPending}
+            >
               Check In for Work
             </Button>
           </>
