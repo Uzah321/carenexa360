@@ -40,7 +40,9 @@ class PayPeriodController extends Controller
         abort_unless($request->user()->hasAnyRole(PayrollRoles::ALLOWED), 403);
         abort_unless($request->user()->ownsTenant($payPeriod->tenant_id), 403);
 
-        return new PayPeriodResource($payPeriod->load(['payslips.user']));
+        return (new PayPeriodResource($payPeriod->load(['payslips.user'])))->additional([
+            'staff_missing_hourly_rate' => PayslipGenerator::staffMissingHourlyRate($payPeriod->tenant_id),
+        ]);
     }
 
     public function generatePayslips(Request $request, PayPeriod $payPeriod)
@@ -50,6 +52,8 @@ class PayPeriodController extends Controller
 
         PayslipGenerator::generateForPeriod($payPeriod);
 
-        return new PayPeriodResource($payPeriod->fresh()->load(['payslips.user']));
+        return (new PayPeriodResource($payPeriod->fresh()->load(['payslips.user'])))->additional([
+            'staff_missing_hourly_rate' => PayslipGenerator::staffMissingHourlyRate($payPeriod->tenant_id),
+        ]);
     }
 }

@@ -65,6 +65,30 @@ class PayslipGenerator
         });
     }
 
+    /**
+     * Staff who never get a payslip on any pay period, silently, because
+     * generateForPeriod()'s whereNotNull('hourly_rate') excludes them before
+     * a payslip row is ever created — surfaced so a payroll admin sees *why*
+     * the generated list is shorter than expected instead of just a shorter
+     * list. Excludes inactive staff — someone who's left isn't missing pay,
+     * they're just gone.
+     *
+     * @return Collection<int, array{id: int, name: string|null}>
+     */
+    public static function staffMissingHourlyRate(int $tenantId): Collection
+    {
+        return StaffProfile::where('tenant_id', $tenantId)
+            ->where('employment_status', '!=', 'inactive')
+            ->whereNull('hourly_rate')
+            ->with('user')
+            ->get()
+            ->map(fn (StaffProfile $staffProfile) => [
+                'id' => $staffProfile->user_id,
+                'name' => $staffProfile->user?->name,
+            ])
+            ->values();
+    }
+
     protected static function hoursForUser(int $userId, PayPeriod $payPeriod): float
     {
         $visitHours = Visit::where('carer_id', $userId)

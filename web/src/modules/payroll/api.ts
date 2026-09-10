@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { Paginated, PayPeriod, Payslip } from "../../lib/types";
+import type { Paginated, PayPeriod, Payslip, StaffMissingHourlyRate } from "../../lib/types";
+
+interface PayPeriodWithWarnings {
+  payPeriod: PayPeriod;
+  staffMissingHourlyRate: StaffMissingHourlyRate[];
+}
 
 export function usePayPeriods(page: number) {
   return useQuery({
@@ -15,9 +20,11 @@ export function usePayPeriods(page: number) {
 export function usePayPeriod(id: number | null) {
   return useQuery({
     queryKey: ["pay-periods", id],
-    queryFn: async () => {
-      const { data } = await apiClient.get<{ data: PayPeriod }>(`/pay-periods/${id}`);
-      return data.data;
+    queryFn: async (): Promise<PayPeriodWithWarnings> => {
+      const { data } = await apiClient.get<{ data: PayPeriod; staff_missing_hourly_rate: StaffMissingHourlyRate[] }>(
+        `/pay-periods/${id}`,
+      );
+      return { payPeriod: data.data, staffMissingHourlyRate: data.staff_missing_hourly_rate };
     },
     enabled: Boolean(id),
   });
@@ -45,9 +52,11 @@ export function useCreatePayPeriod() {
 export function useGeneratePayslips(payPeriodId: number | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const { data } = await apiClient.post<{ data: PayPeriod }>(`/pay-periods/${payPeriodId}/generate-payslips`);
-      return data.data;
+    mutationFn: async (): Promise<PayPeriodWithWarnings> => {
+      const { data } = await apiClient.post<{ data: PayPeriod; staff_missing_hourly_rate: StaffMissingHourlyRate[] }>(
+        `/pay-periods/${payPeriodId}/generate-payslips`,
+      );
+      return { payPeriod: data.data, staffMissingHourlyRate: data.staff_missing_hourly_rate };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["pay-periods"] });

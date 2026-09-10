@@ -34,6 +34,7 @@ class StoreStaffRequest extends FormRequest
             'skills' => ['nullable', 'array'],
             'skills.*' => ['string', 'max:255'],
             'employment_status' => ['nullable', 'string', Rule::in(['active', 'on_leave', 'inactive'])],
+            'hourly_rate' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 }

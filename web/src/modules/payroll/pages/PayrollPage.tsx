@@ -36,7 +36,7 @@ const STATUS_TONE: Record<PayslipStatus, "neutral" | "warning" | "success"> = {
 };
 
 function PayPeriodDrawer({ payPeriodId }: { payPeriodId: number }) {
-  const { data: payPeriod, isLoading } = usePayPeriod(payPeriodId);
+  const { data, isLoading } = usePayPeriod(payPeriodId);
   const generatePayslips = useGeneratePayslips(payPeriodId);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -62,14 +62,25 @@ function PayPeriodDrawer({ payPeriodId }: { payPeriodId: number }) {
     },
   ];
 
+  const missingRate = data?.staffMissingHourlyRate ?? [];
+
   return (
     <div>
       <p className="mb-4 text-sm text-inksoft">
-        {payPeriod?.start_date} – {payPeriod?.end_date}
+        {data?.payPeriod.start_date} – {data?.payPeriod.end_date}
       </p>
       {generateError && (
         <div className="mb-4">
           <Alert tone="danger">{generateError}</Alert>
+        </div>
+      )}
+      {missingRate.length > 0 && (
+        <div className="mb-4">
+          <Alert tone="warning">
+            {missingRate.length} staff member{missingRate.length === 1 ? "" : "s"} won't get a payslip because
+            they have no hourly rate set: {missingRate.map((s) => s.name ?? "Unknown").join(", ")}. Set their
+            rate on the Staff page, then generate again.
+          </Alert>
         </div>
       )}
       <div className="mb-4">
@@ -77,12 +88,12 @@ function PayPeriodDrawer({ payPeriodId }: { payPeriodId: number }) {
           Generate Payslips
         </Button>
       </div>
-      {!isLoading && (payPeriod?.payslips ?? []).length === 0 ? (
+      {!isLoading && (data?.payPeriod.payslips ?? []).length === 0 ? (
         <EmptyState message="No payslips generated yet." />
       ) : (
         <DataTable
           columns={columns}
-          rows={payPeriod?.payslips ?? []}
+          rows={data?.payPeriod.payslips ?? []}
           rowKey={(row) => row.id}
           isLoading={isLoading}
         />

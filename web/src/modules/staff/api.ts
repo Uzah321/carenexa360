@@ -24,6 +24,7 @@ export interface CreateStaffInput {
   job_title?: string;
   employment_start_date?: string;
   skills?: string[];
+  hourly_rate?: number | null;
 }
 
 export function useCreateStaff() {

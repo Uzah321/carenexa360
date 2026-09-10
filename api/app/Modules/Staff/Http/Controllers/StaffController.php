@@ -63,6 +63,7 @@ class StaffController extends Controller
                 'employment_start_date' => $request->validated('employment_start_date'),
                 'skills' => $request->validated('skills', []),
                 'employment_status' => $request->validated('employment_status', 'active'),
+                'hourly_rate' => $request->validated('hourly_rate'),
             ]);
         });
 

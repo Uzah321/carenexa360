@@ -365,6 +365,19 @@ export function StaffPage() {
               placeholder="Type a skill and press Enter"
             />
           </FormField>
+          <FormField label="Hourly rate (for payroll)" htmlFor="staff-hourly-rate">
+            <Input
+              id="staff-hourly-rate"
+              type="number"
+              step="0.01"
+              min={0}
+              placeholder="Leave blank if not paid hourly"
+              value={form.hourly_rate ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, hourly_rate: e.target.value === "" ? null : Number(e.target.value) })
+              }
+            />
+          </FormField>
         </form>
       </Modal>
 

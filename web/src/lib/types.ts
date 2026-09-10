@@ -653,6 +653,13 @@ export interface PayPeriod {
   created_at: string;
 }
 
+/** A staff member PayslipGenerator silently excludes from every pay period
+ * until someone sets their hourly rate on the Staff page. */
+export interface StaffMissingHourlyRate {
+  id: number;
+  name: string | null;
+}
+
 export const PAYSLIP_STATUSES = ["draft", "finalized", "paid"] as const;
 export type PayslipStatus = (typeof PAYSLIP_STATUSES)[number];
 
