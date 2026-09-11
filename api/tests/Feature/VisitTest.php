@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Modules\Organization\Models\Tenant;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Modules\Staff\Models\StaffProfile;
+use App\Notifications\VisitAssignedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -56,6 +58,37 @@ class VisitTest extends TestCase
             ->assertJsonPath('warnings', []);
     }
 
+    public function test_assigning_a_carer_on_create_emails_them(): void
+    {
+        Notification::fake();
+        ['admin' => $admin, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+
+        $this->actingAs($admin)->postJson('/api/v1/visits', [
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carer->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '09:30',
+        ])->assertCreated();
+
+        Notification::assertSentTo($carer, VisitAssignedNotification::class);
+    }
+
+    public function test_creating_an_unassigned_visit_sends_no_email(): void
+    {
+        Notification::fake();
+        ['admin' => $admin, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+
+        $this->actingAs($admin)->postJson('/api/v1/visits', [
+            'service_user_id' => $serviceUser->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '09:30',
+        ])->assertCreated();
+
+        Notification::assertNothingSent();
+    }
+
     public function test_recurring_visit_generates_one_row_per_matching_weekday(): void
     {
         ['admin' => $admin, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
@@ -76,6 +109,27 @@ class VisitTest extends TestCase
         $response->assertCreated();
         $this->assertCount(6, $response->json('data'));
         $this->assertDatabaseCount('visits', 6);
+    }
+
+    public function test_a_recurring_booking_sends_one_summary_email_not_one_per_occurrence(): void
+    {
+        Notification::fake();
+        ['admin' => $admin, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+
+        // Same Mon/Wed/Fri series as the test above — 6 visits, one carer.
+        $this->actingAs($admin)->postJson('/api/v1/visits', [
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carer->id,
+            'visit_date' => '2026-09-07',
+            'start_time' => '09:00',
+            'end_time' => '09:30',
+            'recurrence' => [
+                'weekdays' => [1, 3, 5],
+                'until' => '2026-09-18',
+            ],
+        ])->assertCreated();
+
+        Notification::assertSentToTimes($carer, VisitAssignedNotification::class, 1);
     }
 
     public function test_carer_cannot_be_double_booked(): void
@@ -255,5 +309,73 @@ class VisitTest extends TestCase
             ->patchJson("/api/v1/visits/{$visit->id}", ['carer_id' => $carerB->id])
             ->assertOk()
             ->assertJsonPath('data.carer_id', $carerB->id);
+    }
+
+    public function test_reassigning_a_visit_emails_the_new_carer_but_not_the_previous_one(): void
+    {
+        Notification::fake();
+        ['tenant' => $tenant, 'carer' => $carerA, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+        $carerB = User::factory()->create(['tenant_id' => $tenant->id]);
+        $coordinator = User::factory()->create(['tenant_id' => $tenant->id]);
+        $this->assignRole($coordinator, $tenant, 'Care Coordinator');
+        $visit = \App\Modules\Visits\Models\Visit::create([
+            'tenant_id' => $tenant->id,
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carerA->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+        ]);
+
+        $this->actingAs($coordinator)
+            ->patchJson("/api/v1/visits/{$visit->id}", ['carer_id' => $carerB->id])
+            ->assertOk();
+
+        Notification::assertSentTo($carerB, VisitAssignedNotification::class);
+        Notification::assertNotSentTo($carerA, VisitAssignedNotification::class);
+    }
+
+    public function test_unassigning_a_visit_sends_no_email(): void
+    {
+        Notification::fake();
+        ['tenant' => $tenant, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+        $coordinator = User::factory()->create(['tenant_id' => $tenant->id]);
+        $this->assignRole($coordinator, $tenant, 'Care Coordinator');
+        $visit = \App\Modules\Visits\Models\Visit::create([
+            'tenant_id' => $tenant->id,
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carer->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+        ]);
+
+        $this->actingAs($coordinator)
+            ->patchJson("/api/v1/visits/{$visit->id}", ['carer_id' => null])
+            ->assertOk();
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_editing_a_visit_without_changing_carer_sends_no_email(): void
+    {
+        Notification::fake();
+        ['tenant' => $tenant, 'carer' => $carer, 'serviceUser' => $serviceUser] = $this->makeTenantWithCarer();
+        $coordinator = User::factory()->create(['tenant_id' => $tenant->id]);
+        $this->assignRole($coordinator, $tenant, 'Care Coordinator');
+        $visit = \App\Modules\Visits\Models\Visit::create([
+            'tenant_id' => $tenant->id,
+            'service_user_id' => $serviceUser->id,
+            'carer_id' => $carer->id,
+            'visit_date' => '2026-09-10',
+            'start_time' => '09:00',
+            'end_time' => '10:00',
+        ]);
+
+        $this->actingAs($coordinator)
+            ->patchJson("/api/v1/visits/{$visit->id}", ['carer_id' => $carer->id, 'notes' => 'No change of carer.'])
+            ->assertOk();
+
+        Notification::assertNothingSent();
     }
 }
