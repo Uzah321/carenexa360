@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import { Alert, Button, FormField, Input, Modal, Textarea } from "../../../design-system";
 import { useCreateDemoRequest } from "../api";
 
@@ -73,7 +72,8 @@ export function DemoRequestModal({ isOpen, onClose }: { isOpen: boolean; onClose
           </Alert>
           <p className="mt-4 text-sm text-inksoft">
             No need to wait, though — log in now to a live demo with realistic sample data (staff, service users,
-            schedules, care plans, and more) and explore it yourself:
+            schedules, care plans, and more) and explore it yourself. It's a separate sandbox environment, kept
+            apart from real customer data, so there's nothing to break:
           </p>
           <dl className="mt-3 space-y-1 rounded-xl bg-paper p-4 text-sm">
             <div className="flex justify-between gap-4">
@@ -85,12 +85,15 @@ export function DemoRequestModal({ isOpen, onClose }: { isOpen: boolean; onClose
               <dd className="font-mono font-medium text-ink">{createDemoRequest.data?.demo_login.password}</dd>
             </div>
           </dl>
-          <Link
-            to="/login"
+          {/* Cross-origin to the isolated demo environment, not an in-app
+              route — a plain <a>, not react-router's <Link>, is what
+              actually navigates the browser there. */}
+          <a
+            href={createDemoRequest.data?.demo_login.url ?? "https://demo.carenexa360.co.uk/login"}
             className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-teal px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-teal/90"
           >
             Log In to the Demo →
-          </Link>
+          </a>
         </div>
       ) : (
         <form id="demo-request-form" onSubmit={handleSubmit}>

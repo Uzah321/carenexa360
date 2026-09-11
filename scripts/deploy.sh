@@ -10,6 +10,10 @@
 #   scripts/deploy.sh --api-only      deploy only the Laravel API
 #   scripts/deploy.sh --web-only      deploy only the React frontend
 #   scripts/deploy.sh --allow-dirty   skip the clean-working-tree check
+#   scripts/deploy.sh --demo          deploy to the isolated demo environment
+#                                     (demo.carenexa360.co.uk / its own
+#                                     database) instead of production —
+#                                     combine with the flags above as needed
 #   scripts/deploy.sh rollback        restore the most recent backup (both)
 #   scripts/deploy.sh rollback api    restore only the api backup
 #   scripts/deploy.sh rollback web    restore only the web backup
@@ -41,8 +45,6 @@
 set -euo pipefail
 
 REMOTE_HOST="root@187.7.20.140"
-REMOTE_BASE="/var/www/carenexa360"
-HEALTH_URL="https://carenexa360.co.uk/up"
 PHP_FPM_SERVICE="php8.5-fpm"
 KEEP_BACKUPS=5
 
@@ -54,19 +56,35 @@ DEPLOY_API=1
 ALLOW_DIRTY=0
 MODE="deploy"
 ROLLBACK_TARGET="both"
+TARGET="prod"
 
 for arg in "$@"; do
   case "$arg" in
     --web-only) DEPLOY_API=0 ;;
     --api-only) DEPLOY_WEB=0 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
+    --demo) TARGET="demo" ;;
     rollback) MODE="rollback" ;;
     api) ROLLBACK_TARGET="api" ;;
     web) ROLLBACK_TARGET="web" ;;
-    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,27p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
+
+if [ "$TARGET" = "demo" ]; then
+  # Same VPS, same Postgres/Redis containers — just a separate database, app
+  # directory, domain and .env, set up once by hand (see
+  # project_carenexa360_deployment memory / the Sept 2026 demo-isolation
+  # work). This never re-seeds; it only ever ships new code and migrates the
+  # demo database's own schema forward, so demo data persists across deploys
+  # the same way production's does.
+  REMOTE_BASE="/var/www/carenexa360-demo"
+  HEALTH_URL="https://demo.carenexa360.co.uk/up"
+else
+  REMOTE_BASE="/var/www/carenexa360"
+  HEALTH_URL="https://carenexa360.co.uk/up"
+fi
 
 remote() { ssh "$REMOTE_HOST" "$@"; }
 

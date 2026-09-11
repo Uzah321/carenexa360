@@ -10,7 +10,7 @@ export interface CreateDemoRequestInput {
 }
 
 export interface CreateDemoRequestResult {
-  demo_login: { email: string; password: string };
+  demo_login: { email: string; password: string; url: string };
 }
 
 export function useCreateDemoRequest() {

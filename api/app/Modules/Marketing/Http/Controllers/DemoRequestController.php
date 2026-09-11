@@ -48,6 +48,7 @@ class DemoRequestController extends Controller
             ->additional(['demo_login' => [
                 'email' => DemoTenant::LOGIN_EMAIL,
                 'password' => DemoTenant::LOGIN_PASSWORD,
+                'url' => DemoTenant::LOGIN_URL,
             ]])
             ->response()
             ->setStatusCode(201);
