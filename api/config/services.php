@@ -28,6 +28,13 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
+    'msgraph' => [
+        'tenant_id' => env('MSGRAPH_TENANT_ID'),
+        'client_id' => env('MSGRAPH_CLIENT_ID'),
+        'client_secret' => env('MSGRAPH_CLIENT_SECRET'),
+        'from_address' => env('MSGRAPH_FROM_ADDRESS'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
