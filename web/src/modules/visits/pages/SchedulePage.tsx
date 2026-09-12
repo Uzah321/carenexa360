@@ -95,6 +95,22 @@ export function SchedulePage() {
   const [dragError, setDragError] = useState<string | null>(null);
   const [dragPreview, setDragPreview] = useState<DragInfo | null>(null);
 
+  // The carer-pool row's sticky content wrapper must never be wider than what's
+  // actually visible, or there isn't room left in its (much wider) containing
+  // row for `sticky` to hold it in place once scrolled near the end of the
+  // timeline — it'd get shoved back left instead of staying put. Measuring the
+  // real viewport (rather than guessing from 100vw) keeps this correct at any
+  // sidebar/window width.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollViewportWidth, setScrollViewportWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setScrollViewportWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Source of truth inside the pointer handlers below (avoids stale closures
   // in the mount-once effect). `dragPreview` state is a snapshot of it kept
   // in sync purely so the render below has something reactive to read —
@@ -626,7 +642,7 @@ export function SchedulePage() {
             height — so scrolling through a long list of rows moves only the
             grid, not the header/date controls/legend above it. The hour
             header and name column stay `sticky` to *this* scroll container. */}
-        <div className="max-h-[70vh] overflow-auto">
+        <div ref={scrollContainerRef} className="max-h-[70vh] overflow-auto">
           <div className="relative" style={{ width: NAME_COLUMN_WIDTH + timelineWidth, minWidth: "100%" }}>
             {/* Hour header */}
             <div
@@ -724,82 +740,101 @@ export function SchedulePage() {
 
             {view === "client" && (<>
             {/* Client search — filters the rows below without touching who is in
-                the Unassigned pool or what's already scheduled. */}
-            <div className="flex items-center gap-3 border-b border-line bg-white px-3 py-2.5">
-              <div style={{ width: NAME_COLUMN_WIDTH - 12 }}>
-                <FormField label="Search clients" htmlFor="schedule-client-search">
-                  <Input
-                    id="schedule-client-search"
-                    type="search"
-                    placeholder="Name"
-                    value={clientSearch}
-                    onChange={(e) => setClientSearch(e.target.value)}
-                  />
-                </FormField>
+                the Unassigned pool or what's already scheduled. This row has no
+                hour-based content, so it must never scroll with the timeline.
+                The background spans the full scrollable width for a clean edge,
+                but the actual content sits in an inner `sticky` wrapper — a
+                sticky element only has room to stick within its containing
+                block, so it must stay narrower than the (very wide) row, or
+                there's no slack for it to move and it just scrolls away. */}
+            <div className="flex items-center border-b border-line bg-white">
+              <div className="sticky left-0 z-10 flex items-center gap-3 px-3 py-2.5">
+                <div style={{ width: NAME_COLUMN_WIDTH - 12 }}>
+                  <FormField label="Search clients" htmlFor="schedule-client-search">
+                    <Input
+                      id="schedule-client-search"
+                      type="search"
+                      placeholder="Name"
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                    />
+                  </FormField>
+                </div>
+                {clientSearch && (
+                  <span className="mt-5 whitespace-nowrap text-xs text-inksoft">
+                    {visibleClients.length} of {clients.length} client{clients.length === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
-              {clientSearch && (
-                <span className="mt-5 text-xs text-inksoft">
-                  {visibleClients.length} of {clients.length} client{clients.length === 1 ? "" : "s"}
-                </span>
-              )}
             </div>
 
             {/* The carer pool. Every carer stays here all day — a carer covers
-                several clients, so they have to remain draggable after the first. */}
+                several clients, so they have to remain draggable after the first.
+                Same fix as the search row above: full-width background, but the
+                sticky content wrapper stays narrower than the row so it actually
+                has room to stick instead of scrolling away with the timeline. */}
             <div className="flex border-b-2 border-amber/40 bg-ambertint/20">
               <div
-                className="sticky left-0 z-10 flex shrink-0 items-start border-r border-line bg-ambertint/40 px-3 py-3 text-sm font-medium text-ink"
-                style={{ width: NAME_COLUMN_WIDTH }}
+                className="sticky left-0 z-10 flex items-start"
+                style={{
+                  width: "fit-content",
+                  maxWidth: scrollViewportWidth ? `${scrollViewportWidth}px` : undefined,
+                }}
               >
-                Unassigned
-              </div>
-              <div className="flex flex-wrap items-start gap-2 p-3" style={{ width: timelineWidth }}>
-                {carerPool.map((carer) => {
-                  const load = loadByCarer.get(carer.user_id) ?? 0;
-                  const isCheckedIn = canViewLiveMap && checkedInUserIds.has(carer.user_id);
-                  return (
-                    <div key={carer.id} className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onPointerDown={(e) => startCarerDrag(e, carer)}
-                        onClick={() => {
-                          if (suppressChipClickRef.current) {
-                            suppressChipClickRef.current = false;
-                            return;
-                          }
-                          setAssigningCarer({ user_id: carer.user_id, name: carer.name });
-                        }}
-                        style={{ touchAction: "none" }}
-                        title={`${carer.name} — ${load} visit${load === 1 ? "" : "s"} today. Drag onto a client to give them work, or click to book a visit.`}
-                        className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
-                          carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
-                        }`}
-                      >
-                        {carer.name}
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-                            load === 0 ? "bg-paper text-inksoft" : "bg-tealtint text-teal"
-                          }`}
-                        >
-                          {load}
-                        </span>
-                      </button>
-                      {isCheckedIn && (
+                <div
+                  className="flex shrink-0 items-start border-r border-line bg-ambertint/40 px-3 py-3 text-sm font-medium text-ink"
+                  style={{ width: NAME_COLUMN_WIDTH }}
+                >
+                  Unassigned
+                </div>
+                <div className="flex flex-wrap items-start gap-2 p-3">
+                  {carerPool.map((carer) => {
+                    const load = loadByCarer.get(carer.user_id) ?? 0;
+                    const isCheckedIn = canViewLiveMap && checkedInUserIds.has(carer.user_id);
+                    return (
+                      <div key={carer.id} className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => goToCarerLocation(carer.user_id)}
-                          title={`${carer.name} is checked in — view their location on the Live Map`}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lime/40 bg-limetint text-lime shadow-sm transition-colors duration-150 hover:bg-lime hover:text-white"
+                          onPointerDown={(e) => startCarerDrag(e, carer)}
+                          onClick={() => {
+                            if (suppressChipClickRef.current) {
+                              suppressChipClickRef.current = false;
+                              return;
+                            }
+                            setAssigningCarer({ user_id: carer.user_id, name: carer.name });
+                          }}
+                          style={{ touchAction: "none" }}
+                          title={`${carer.name} — ${load} visit${load === 1 ? "" : "s"} today. Drag onto a client to give them work, or click to book a visit.`}
+                          className={`flex cursor-grab items-center gap-1.5 rounded-full border bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-sm transition-colors duration-150 hover:border-teal hover:text-teal active:cursor-grabbing ${
+                            carerDrag?.userId === carer.user_id ? "border-teal opacity-40" : "border-line"
+                          }`}
                         >
-                          <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                          {carer.name}
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                              load === 0 ? "bg-paper text-inksoft" : "bg-tealtint text-teal"
+                            }`}
+                          >
+                            {load}
+                          </span>
                         </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {carerPool.length === 0 && (
-                  <span className="text-xs text-inksoft">No carers available for this branch.</span>
-                )}
+                        {isCheckedIn && (
+                          <button
+                            type="button"
+                            onClick={() => goToCarerLocation(carer.user_id)}
+                            title={`${carer.name} is checked in — view their location on the Live Map`}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lime/40 bg-limetint text-lime shadow-sm transition-colors duration-150 hover:bg-lime hover:text-white"
+                          >
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {carerPool.length === 0 && (
+                    <span className="text-xs text-inksoft">No carers available for this branch.</span>
+                  )}
+                </div>
               </div>
             </div>
 
