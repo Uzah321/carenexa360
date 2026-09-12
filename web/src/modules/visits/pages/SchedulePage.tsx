@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Alert, Card, FormField, Input, PageHeader, Select } from "../../../design-system";
 import { useAuth } from "../../../lib/auth-context";
@@ -930,17 +931,29 @@ export function SchedulePage() {
       </Card>
 
       <EditVisitModal visit={editingVisit} onClose={() => setEditingVisit(null)} />
-      {carerDrag?.moved && (
-        <div
-          className="pointer-events-none fixed z-[100] flex items-center gap-1.5 rounded-full border border-teal bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-lg"
-          style={{ left: carerDrag.x + 12, top: carerDrag.y + 12 }}
-        >
-          {carerDrag.name}
-          <span className="rounded-full bg-tealtint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
-            Drop on a visit
-          </span>
-        </div>
-      )}
+      {carerDrag?.moved &&
+        createPortal(
+          // Rendered straight onto <body> rather than in normal flow: this page
+          // sits inside layout containers with their own scroll (the app shell's
+          // <main>, this grid's own scroll box), and a `position: fixed`
+          // descendant of a scrolling container is exactly the case several
+          // mobile browsers (notably iOS Safari) get wrong — the "fixed" element
+          // drifts with the container's scroll instead of staying pinned to the
+          // pointer, which is what made this ghost chip land somewhere other
+          // than where you were actually dragging. A portal keeps it a sibling
+          // of the scrolling containers in the DOM, not a descendant of any of
+          // them, so that bug class can't apply.
+          <div
+            className="pointer-events-none fixed z-[100] flex items-center gap-1.5 rounded-full border border-teal bg-white py-1 pl-3 pr-2 text-xs font-medium text-ink shadow-lg"
+            style={{ left: carerDrag.x + 12, top: carerDrag.y + 12 }}
+          >
+            {carerDrag.name}
+            <span className="rounded-full bg-tealtint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+              Drop on a visit
+            </span>
+          </div>,
+          document.body,
+        )}
 
       <AssignTaskModal carer={assigningCarer} date={date} onClose={() => setAssigningCarer(null)} />
       <AssignTaskModal
