@@ -16,7 +16,7 @@ function weekLabel(iso: string): string {
 }
 
 function money(value: number): string {
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return `£${value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 }
 
 export function OperationsDashboardPage() {
