@@ -32,6 +32,8 @@ class Observation extends Model
         'bowel_movement',
         'sleep',
         'mood',
+        // A full set of NEWS2 vital signs recorded together — see Support\News2.
+        'news2',
     ];
 
     protected $fillable = [

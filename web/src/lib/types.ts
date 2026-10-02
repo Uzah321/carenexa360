@@ -535,8 +535,28 @@ export const OBSERVATION_TYPES = [
   "bowel_movement",
   "sleep",
   "mood",
+  "news2",
 ] as const;
 export type ObservationType = (typeof OBSERVATION_TYPES)[number];
+
+export type News2Direction = "low" | "high" | "normal" | "abnormal";
+export type News2Risk = "none" | "low" | "low_medium" | "medium" | "high";
+
+export interface News2Parameter {
+  parameter: string;
+  label: string;
+  reading: string;
+  score: number;
+  direction: News2Direction;
+}
+
+export interface News2Assessment {
+  total: number;
+  risk: News2Risk;
+  single_parameter_3: boolean;
+  response: string;
+  parameters: News2Parameter[];
+}
 
 export interface ClinicalAlert {
   id: number;
@@ -555,13 +575,14 @@ export interface Observation {
   service_user_id: number;
   visit_id: number | null;
   type: ObservationType;
-  value: Record<string, number | string>;
+  value: Record<string, number | string | boolean>;
   unit: string | null;
   recorded_by: number | null;
   recorded_by_name?: string | null;
   recorded_at: string;
   notes: string | null;
   archived_at: string | null;
+  news2?: News2Assessment | null;
   alerts?: ClinicalAlert[];
   created_at: string;
 }

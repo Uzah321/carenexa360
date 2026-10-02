@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   Alert,
   Button,
@@ -9,7 +9,6 @@ import {
   DataTable,
   EmptyState,
   FormField,
-  Input,
   Modal,
   RowActionsMenu,
   Select,
@@ -27,16 +26,23 @@ import {
   useUpdateObservation,
 } from "../../observations/api";
 import { ObservationTrendChart } from "../../observations/components/ObservationTrendChart";
+import { News2Badge, News2Summary, ObservationValueFields } from "../../observations/components/News2Fields";
+import { DEFAULT_UNITS, draftToValue, valueToDraft, type ObservationDraft } from "../../observations/observationDraft";
+import { assessNews2 } from "../../observations/news2";
 import { OBSERVATION_TYPES, type Observation, type ObservationType } from "../../../lib/types";
 
 function labelFor(type: ObservationType): string {
-  return type.replaceAll("_", " ");
+  return type === "news2" ? "NEWS2 full set" : type.replaceAll("_", " ");
 }
 
 function readingText(observation: Observation): string {
-  return observation.type === "blood_pressure"
-    ? `${observation.value.systolic}/${observation.value.diastolic} mmHg`
-    : `${observation.value.value}${observation.unit ? ` ${observation.unit}` : ""}`;
+  const v = observation.value;
+  if (observation.type === "blood_pressure") return `${v.systolic}/${v.diastolic} mmHg`;
+  if (observation.type === "news2") {
+    return `RR ${v.respiration_rate} · SpO₂ ${v.spo2}%${v.on_oxygen ? " (O₂)" : ""} · BP ${v.systolic} · P ${v.pulse} · T ${v.temperature}°C`;
+  }
+  const oxygen = observation.type === "oxygen_saturation" && v.on_oxygen === true ? " on O₂" : "";
+  return `${v.value}${observation.unit ? ` ${observation.unit}` : ""}${oxygen}`;
 }
 
 export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
@@ -50,19 +56,13 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formType, setFormType] = useState<ObservationType>("blood_pressure");
-  const [systolic, setSystolic] = useState("");
-  const [diastolic, setDiastolic] = useState("");
-  const [value, setValue] = useState("");
-  const [unit, setUnit] = useState("");
+  const [draft, setDraft] = useState<ObservationDraft>({});
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const [viewingObservation, setViewingObservation] = useState<Observation | null>(null);
   const [editingObservation, setEditingObservation] = useState<Observation | null>(null);
-  const [editSystolic, setEditSystolic] = useState("");
-  const [editDiastolic, setEditDiastolic] = useState("");
-  const [editValue, setEditValue] = useState("");
-  const [editUnit, setEditUnit] = useState("");
+  const [editDraft, setEditDraft] = useState<ObservationDraft>({});
   const [editNotes, setEditNotes] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Observation | null>(null);
@@ -71,13 +71,31 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
   const activeAlerts = (alerts ?? []).filter((a) => !a.acknowledged_at);
   const readingsForType = (observations ?? []).filter((o) => o.type === selectedType);
 
-  function resetForm() {
+  // SpO2 Scale 2 is a clinical decision made once for the person, not per
+  // reading — carry forward whichever scale their latest SpO2 reading used.
+  const lastSpo2Scale = useMemo(() => {
+    const latest = (observations ?? []).find((o) => (o.type === "oxygen_saturation" || o.type === "news2") && o.value.spo2_scale);
+    return latest ? String(latest.value.spo2_scale) : "1";
+  }, [observations]);
+
+  const livePreview = useMemo(() => assessNews2(formType, draftToValue(formType, draft)), [formType, draft]);
+  const editPreview = useMemo(
+    () => (editingObservation ? assessNews2(editingObservation.type, draftToValue(editingObservation.type, editDraft)) : null),
+    [editingObservation, editDraft],
+  );
+
+  function freshDraft(type: ObservationType): ObservationDraft {
+    if (type === "news2") return { spo2_scale: lastSpo2Scale, on_oxygen: false, consciousness: "alert" };
+    if (type === "oxygen_saturation") return { spo2_scale: lastSpo2Scale, on_oxygen: false };
+    return {};
+  }
+
+  function openCreate() {
     setFormType("blood_pressure");
-    setSystolic("");
-    setDiastolic("");
-    setValue("");
-    setUnit("");
+    setDraft(freshDraft("blood_pressure"));
     setNotes("");
+    setError(null);
+    setIsCreateOpen(true);
   }
 
   async function handleCreate(event: FormEvent) {
@@ -86,15 +104,11 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
     try {
       await createObservation.mutateAsync({
         type: formType,
-        value:
-          formType === "blood_pressure"
-            ? { systolic: Number(systolic), diastolic: Number(diastolic) }
-            : { value: Number(value) },
-        unit: unit || undefined,
+        value: draftToValue(formType, draft),
+        unit: String(draft.unit || DEFAULT_UNITS[formType] || "") || undefined,
         notes: notes || undefined,
       });
       setIsCreateOpen(false);
-      resetForm();
     } catch (err) {
       setError(apiErrorMessage(err, "Could not save this observation. Please try again."));
     }
@@ -102,13 +116,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
 
   function openEdit(observation: Observation) {
     setEditingObservation(observation);
-    if (observation.type === "blood_pressure") {
-      setEditSystolic(String(observation.value.systolic ?? ""));
-      setEditDiastolic(String(observation.value.diastolic ?? ""));
-    } else {
-      setEditValue(String(observation.value.value ?? ""));
-    }
-    setEditUnit(observation.unit ?? "");
+    setEditDraft({ ...valueToDraft(observation.value), unit: observation.unit ?? "" });
     setEditNotes(observation.notes ?? "");
     setEditError(null);
   }
@@ -120,11 +128,8 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
     try {
       await updateObservation.mutateAsync({
         id: editingObservation.id,
-        value:
-          editingObservation.type === "blood_pressure"
-            ? { systolic: Number(editSystolic), diastolic: Number(editDiastolic) }
-            : { value: Number(editValue) },
-        unit: editUnit || null,
+        value: draftToValue(editingObservation.type, editDraft),
+        unit: String(editDraft.unit ?? "") || null,
         notes: editNotes || null,
       });
       setEditingObservation(null);
@@ -155,6 +160,11 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
       key: "value",
       header: "Reading",
       render: (row) => readingText(row),
+    },
+    {
+      key: "news2",
+      header: "Status",
+      render: (row) => <News2Badge assessment={row.news2} isSet={row.type === "news2"} />,
     },
     { key: "recorded_by", header: "Recorded By", render: (row) => row.recorded_by_name ?? "—" },
     {
@@ -191,7 +201,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <span>Observations</span>
-          <Button variant="secondary" onClick={() => setIsCreateOpen(true)}>
+          <Button variant="secondary" onClick={openCreate}>
             Record Observation
           </Button>
         </div>
@@ -274,7 +284,11 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
             <Select
               id="observation-type"
               value={formType}
-              onChange={(e) => setFormType(e.target.value as ObservationType)}
+              onChange={(e) => {
+                const type = e.target.value as ObservationType;
+                setFormType(type);
+                setDraft(freshDraft(type));
+              }}
             >
               {OBSERVATION_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -284,43 +298,14 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
             </Select>
           </FormField>
 
-          {formType === "blood_pressure" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Systolic" htmlFor="observation-systolic">
-                <Input
-                  id="observation-systolic"
-                  type="number"
-                  required
-                  value={systolic}
-                  onChange={(e) => setSystolic(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Diastolic" htmlFor="observation-diastolic">
-                <Input
-                  id="observation-diastolic"
-                  type="number"
-                  required
-                  value={diastolic}
-                  onChange={(e) => setDiastolic(e.target.value)}
-                />
-              </FormField>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Value" htmlFor="observation-value">
-                <Input
-                  id="observation-value"
-                  type="number"
-                  required
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Unit" htmlFor="observation-unit">
-                <Input id="observation-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
-              </FormField>
-            </div>
-          )}
+          <ObservationValueFields
+            type={formType}
+            idPrefix="observation"
+            draft={draft}
+            onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+          />
+
+          <News2Summary assessment={livePreview} isSet={formType === "news2"} />
 
           <FormField label="Notes" htmlFor="observation-notes">
             <Textarea id="observation-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -352,43 +337,15 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
               <Alert tone="danger">{editError}</Alert>
             </div>
           )}
-          {editingObservation?.type === "blood_pressure" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Systolic" htmlFor="edit-observation-systolic">
-                <Input
-                  id="edit-observation-systolic"
-                  type="number"
-                  required
-                  value={editSystolic}
-                  onChange={(e) => setEditSystolic(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Diastolic" htmlFor="edit-observation-diastolic">
-                <Input
-                  id="edit-observation-diastolic"
-                  type="number"
-                  required
-                  value={editDiastolic}
-                  onChange={(e) => setEditDiastolic(e.target.value)}
-                />
-              </FormField>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Value" htmlFor="edit-observation-value">
-                <Input
-                  id="edit-observation-value"
-                  type="number"
-                  required
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Unit" htmlFor="edit-observation-unit">
-                <Input id="edit-observation-unit" value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
-              </FormField>
-            </div>
+          {editingObservation && (
+            <ObservationValueFields
+              type={editingObservation.type}
+              idPrefix="edit-observation"
+              draft={editDraft}
+              onChange={(patch) => setEditDraft((prev) => ({ ...prev, ...patch }))}
+            />
           )}
+          <News2Summary assessment={editPreview} isSet={editingObservation?.type === "news2"} />
           <FormField label="Notes" htmlFor="edit-observation-notes">
             <Textarea id="edit-observation-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
           </FormField>
@@ -406,24 +363,27 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
         }
       >
         {viewingObservation && (
-          <dl>
-            <div className="flex justify-between border-b border-line py-2 text-sm">
-              <dt className="text-inksoft">Recorded at</dt>
-              <dd className="font-medium text-ink">{new Date(viewingObservation.recorded_at).toLocaleString()}</dd>
-            </div>
-            <div className="flex justify-between border-b border-line py-2 text-sm">
-              <dt className="text-inksoft">Reading</dt>
-              <dd className="font-medium text-ink">{readingText(viewingObservation)}</dd>
-            </div>
-            <div className="flex justify-between border-b border-line py-2 text-sm">
-              <dt className="text-inksoft">Recorded by</dt>
-              <dd className="font-medium text-ink">{viewingObservation.recorded_by_name ?? "—"}</dd>
-            </div>
-            <div className="border-b border-line py-2 text-sm last:border-0">
-              <dt className="mb-1 text-inksoft">Notes</dt>
-              <dd className="font-medium text-ink">{viewingObservation.notes ?? "—"}</dd>
-            </div>
-          </dl>
+          <>
+            <dl className="mb-4">
+              <div className="flex justify-between border-b border-line py-2 text-sm">
+                <dt className="text-inksoft">Recorded at</dt>
+                <dd className="font-medium text-ink">{new Date(viewingObservation.recorded_at).toLocaleString()}</dd>
+              </div>
+              <div className="flex justify-between gap-4 border-b border-line py-2 text-sm">
+                <dt className="text-inksoft">Reading</dt>
+                <dd className="text-right font-medium text-ink">{readingText(viewingObservation)}</dd>
+              </div>
+              <div className="flex justify-between border-b border-line py-2 text-sm">
+                <dt className="text-inksoft">Recorded by</dt>
+                <dd className="font-medium text-ink">{viewingObservation.recorded_by_name ?? "—"}</dd>
+              </div>
+              <div className="border-b border-line py-2 text-sm last:border-0">
+                <dt className="mb-1 text-inksoft">Notes</dt>
+                <dd className="font-medium text-ink">{viewingObservation.notes ?? "—"}</dd>
+              </div>
+            </dl>
+            <News2Summary assessment={viewingObservation.news2 ?? null} isSet={viewingObservation.type === "news2"} />
+          </>
         )}
       </Modal>
 

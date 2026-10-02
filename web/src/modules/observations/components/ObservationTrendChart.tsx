@@ -29,7 +29,9 @@ function extractSeries(observations: Observation[], type: ObservationType): Poin
     .map((o) => ({
       x: new Date(o.recorded_at).getTime(),
       recordedAt: o.recorded_at,
-      primary: type === "blood_pressure" ? Number(o.value.systolic) : Number(o.value.value),
+      // A NEWS2 set has no single "value" — its trend is the aggregate score.
+      primary:
+        type === "blood_pressure" ? Number(o.value.systolic) : type === "news2" ? Number(o.news2?.total) : Number(o.value.value),
       secondary: type === "blood_pressure" ? Number(o.value.diastolic) : undefined,
       alertSeverity: o.alerts?.[0]?.severity,
     }))
@@ -193,7 +195,7 @@ export function ObservationTrendChart({
             </div>
           ) : (
             <div>
-              {hovered.primary} {unit ?? ""}
+              {type === "news2" ? `NEWS2 score ${hovered.primary}` : `${hovered.primary} ${unit ?? ""}`}
             </div>
           )}
           {hovered.alertSeverity && (

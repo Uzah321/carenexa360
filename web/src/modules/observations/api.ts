@@ -18,7 +18,7 @@ export function useObservations(serviceUserId: number, type?: ObservationType) {
 
 export interface CreateObservationInput {
   type: ObservationType;
-  value: Record<string, number | string>;
+  value: Record<string, number | string | boolean>;
   unit?: string;
   recorded_at?: string;
   notes?: string;
@@ -42,7 +42,7 @@ export function useCreateObservation(serviceUserId: number) {
 }
 
 export interface UpdateObservationInput {
-  value?: Record<string, number | string>;
+  value?: Record<string, number | string | boolean>;
   unit?: string | null;
   recorded_at?: string;
   notes?: string | null;
