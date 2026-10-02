@@ -19,6 +19,7 @@ class CarePlanResource extends JsonResource
             'created_by_name' => $this->whenLoaded('createdBy', fn () => $this->createdBy?->name),
             'notes' => $this->notes,
             'sections' => CarePlanSectionResource::collection($this->whenLoaded('sections')),
+            'risk_assessments' => CarePlanRiskAssessmentResource::collection($this->whenLoaded('riskAssessments')),
             'created_at' => $this->created_at,
         ];
     }

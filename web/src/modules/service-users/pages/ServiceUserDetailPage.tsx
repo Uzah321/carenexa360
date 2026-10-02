@@ -58,7 +58,7 @@ export function ServiceUserDetailPage() {
       />
       <div className="mt-4">
         {tab === "overview" && <OverviewTab serviceUser={serviceUser} />}
-        {tab === "care-plan" && <CarePlanTab serviceUserId={id} />}
+        {tab === "care-plan" && <CarePlanTab serviceUserId={id} serviceUser={serviceUser} />}
         {tab === "assessments" && <AssessmentsTab serviceUserId={id} />}
         {tab === "medications" && <MedicationsTab serviceUserId={id} />}
         {tab === "observations" && <ObservationsTab serviceUserId={id} />}

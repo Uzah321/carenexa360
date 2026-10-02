@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { CarePlan, CarePlanArea, CarePlanRiskLevel } from "../../lib/types";
+import type {
+  CarePlan,
+  CarePlanArea,
+  CarePlanRiskLevel,
+  MedicationRiskDetails,
+  PersonAtRisk,
+  RiskAssessmentType,
+} from "../../lib/types";
 
 export function useCarePlans(serviceUserId: number) {
   return useQuery({
@@ -41,10 +48,36 @@ export interface CarePlanSectionInput {
   notes?: string;
 }
 
+export interface CarePlanRiskAssessmentInput {
+  type: RiskAssessmentType;
+  area: CarePlanArea | "";
+  hazard: string;
+  persons_at_risk: PersonAtRisk[];
+  harm_description: string;
+  likelihood: number | null;
+  severity: number | null;
+  existing_controls: string;
+  further_actions: string;
+  residual_likelihood: number | null;
+  residual_severity: number | null;
+  action_owner_id: number | null;
+  action_due_date: string;
+  review_date: string;
+  medication_details: MedicationRiskDetails | null;
+}
+
+type BlankableRiskField = "area" | "harm_description" | "existing_controls" | "further_actions" | "action_due_date" | "review_date";
+
+// What's actually sent — form blanks ("") become nulls, see normalizeRiskAssessmentInput.
+export type CarePlanRiskAssessmentPayload = Omit<CarePlanRiskAssessmentInput, BlankableRiskField> & {
+  [K in BlankableRiskField]: Exclude<CarePlanRiskAssessmentInput[K], ""> | null;
+};
+
 export interface CreateCarePlanInput {
   effective_from: string;
   notes?: string;
   sections: CarePlanSectionInput[];
+  risk_assessments?: CarePlanRiskAssessmentPayload[];
 }
 
 export function useCreateCarePlan(serviceUserId: number) {

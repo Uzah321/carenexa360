@@ -192,7 +192,62 @@ export interface CarePlan {
   created_by_name?: string | null;
   notes: string | null;
   sections: CarePlanSection[];
+  risk_assessments?: CarePlanRiskAssessment[];
   created_at: string;
+}
+
+export const RISK_ASSESSMENT_TYPES = ["general", "medication"] as const;
+export type RiskAssessmentType = (typeof RISK_ASSESSMENT_TYPES)[number];
+
+export const PERSONS_AT_RISK = [
+  "service_user",
+  "care_staff",
+  "family_members",
+  "other_household_members",
+  "visitors",
+  "members_of_public",
+] as const;
+export type PersonAtRisk = (typeof PERSONS_AT_RISK)[number];
+
+export const MEDICATION_SUPPORT_LEVELS = ["self_administers", "prompt", "assist", "administer"] as const;
+export type MedicationSupportLevel = (typeof MEDICATION_SUPPORT_LEVELS)[number];
+
+export interface MedicationRiskDetails {
+  medication_name?: string | null;
+  dose_route_frequency?: string | null;
+  support_level?: MedicationSupportLevel | null;
+  capacity_and_consent?: string | null;
+  storage?: string | null;
+  controlled_drug?: boolean | null;
+  prn?: boolean | null;
+  prn_protocol?: string | null;
+  side_effects_to_monitor?: string | null;
+  known_allergies?: string | null;
+  ordering_and_collection?: string | null;
+  disposal?: string | null;
+  error_response?: string | null;
+}
+
+export interface CarePlanRiskAssessment {
+  id: number;
+  type: RiskAssessmentType;
+  area: CarePlanArea | null;
+  hazard: string;
+  persons_at_risk: PersonAtRisk[];
+  harm_description: string | null;
+  likelihood: number | null;
+  severity: number | null;
+  risk_score: number | null;
+  existing_controls: string | null;
+  further_actions: string | null;
+  residual_likelihood: number | null;
+  residual_severity: number | null;
+  residual_risk_score: number | null;
+  action_owner_id: number | null;
+  action_owner_name?: string | null;
+  action_due_date: string | null;
+  review_date: string | null;
+  medication_details: MedicationRiskDetails | null;
 }
 
 export const ASSESSMENT_FIELD_TYPES = [

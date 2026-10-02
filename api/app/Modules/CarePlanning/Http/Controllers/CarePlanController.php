@@ -21,7 +21,7 @@ class CarePlanController extends Controller
 
         return CarePlanResource::collection(
             $serviceUser->carePlans()
-                ->with(['sections.responsibleStaff', 'createdBy'])
+                ->with(['sections.responsibleStaff', 'riskAssessments.actionOwner', 'createdBy'])
                 ->orderByDesc('version')
                 ->get()
         );
@@ -53,10 +53,22 @@ class CarePlanController extends Controller
                 ]);
             }
 
+            foreach ($request->validated('risk_assessments') ?? [] as $riskAssessment) {
+                $carePlan->riskAssessments()->create([
+                    ...$riskAssessment,
+                    'tenant_id' => $serviceUser->tenant_id,
+                    // Medication details only mean something on a medication
+                    // assessment — drop any stray ones sent with a general one.
+                    'medication_details' => $riskAssessment['type'] === 'medication'
+                        ? ($riskAssessment['medication_details'] ?? null)
+                        : null,
+                ]);
+            }
+
             return $carePlan;
         });
 
-        return new CarePlanResource($carePlan->load(['sections', 'createdBy']));
+        return new CarePlanResource($carePlan->load(['sections', 'riskAssessments', 'createdBy']));
     }
 
     public function show(Request $request, CarePlan $carePlan)
@@ -66,6 +78,6 @@ class CarePlanController extends Controller
             403
         );
 
-        return new CarePlanResource($carePlan->load(['sections.responsibleStaff', 'createdBy']));
+        return new CarePlanResource($carePlan->load(['sections.responsibleStaff', 'riskAssessments.actionOwner', 'createdBy']));
     }
 }

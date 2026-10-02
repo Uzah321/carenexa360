@@ -46,4 +46,9 @@ class CarePlan extends Model
     {
         return $this->hasMany(CarePlanSection::class);
     }
+
+    public function riskAssessments(): HasMany
+    {
+        return $this->hasMany(CarePlanRiskAssessment::class);
+    }
 }

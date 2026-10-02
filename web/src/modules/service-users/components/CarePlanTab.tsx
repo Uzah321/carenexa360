@@ -17,11 +17,28 @@ import {
   Textarea,
   type TabItem,
 } from "../../../design-system";
-import { useCarePlans, useCreateCarePlan, type CarePlanSectionInput } from "../../care-planning/api";
+import {
+  useCarePlans,
+  useCreateCarePlan,
+  type CarePlanRiskAssessmentInput,
+  type CarePlanSectionInput,
+} from "../../care-planning/api";
+import { emptyRiskAssessmentInput, normalizeRiskAssessmentInput, toRiskAssessmentInput } from "../../care-planning/risk";
+import { downloadCarePlanWord, printCarePlan } from "../../care-planning/carePlanExport";
+import { RiskAssessmentFormFields, RiskAssessmentList } from "./RiskAssessmentPanels";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { useStaff } from "../../staff/api";
-import type { StaffMember } from "../../../lib/types";
-import { CARE_PLAN_AREAS, CARE_PLAN_RISK_LEVELS, type CarePlan, type CarePlanRiskLevel, type CarePlanSection } from "../../../lib/types";
+import {
+  CARE_PLAN_AREAS,
+  CARE_PLAN_RISK_LEVELS,
+  type CarePlan,
+  type CarePlanRiskAssessment,
+  type CarePlanRiskLevel,
+  type CarePlanSection,
+  type RiskAssessmentType,
+  type ServiceUser,
+  type StaffMember,
+} from "../../../lib/types";
 import { todayIso } from "../../../lib/dates";
 
 const EMPTY_SECTION: CarePlanSectionInput = {
@@ -319,18 +336,18 @@ function OverviewTab({
   );
 }
 
-function RisksTab({ sections }: { sections: CarePlanSection[] }) {
+function AreaRiskLevels({ sections }: { sections: CarePlanSection[] }) {
   const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
   const withRisk = sections
     .filter((s) => s.risk)
     .sort((a, b) => (severityOrder[a.risk ?? ""] ?? 3) - (severityOrder[b.risk ?? ""] ?? 3));
 
-  if (withRisk.length === 0) {
-    return <EmptyState message="No risks have been assessed on this care plan." />;
-  }
+  if (withRisk.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line bg-white">
+    <div>
+      <h3 className="mb-2 mt-2 text-sm font-semibold text-ink">Care plan area risk levels</h3>
+      <div className="overflow-x-auto rounded-2xl border border-line bg-white">
       <table className="min-w-full divide-y divide-line">
         <thead className="bg-paper">
           <tr>
@@ -354,6 +371,7 @@ function RisksTab({ sections }: { sections: CarePlanSection[] }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -422,7 +440,7 @@ function HistoryTab({ plans, viewingId, onSelect }: { plans: CarePlan[]; viewing
   );
 }
 
-export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
+export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: number; serviceUser?: ServiceUser }) {
   const { data: plans, isLoading } = useCarePlans(serviceUserId);
   const { data: staff } = useStaff(1, 500);
   const createCarePlan = useCreateCarePlan(serviceUserId);
@@ -437,6 +455,11 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
   const [editingSection, setEditingSection] = useState<CarePlanSection | null>(null);
   const [editDraft, setEditDraft] = useState<CarePlanSectionInput>({ ...EMPTY_SECTION });
   const [removingSection, setRemovingSection] = useState<CarePlanSection | null>(null);
+  // `editingRiskId` is null while adding a new risk assessment.
+  const [riskDrawerOpen, setRiskDrawerOpen] = useState(false);
+  const [editingRiskId, setEditingRiskId] = useState<number | null>(null);
+  const [riskDraft, setRiskDraft] = useState<CarePlanRiskAssessmentInput>(emptyRiskAssessmentInput("general"));
+  const [removingRisk, setRemovingRisk] = useState<CarePlanRiskAssessment | null>(null);
   // Shared by every caller of submitAsNewVersion — New Version, Edit Section,
   // and Remove Section — since only one of those drawers/dialogs is ever open
   // at once.
@@ -455,7 +478,8 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
   const tabItems: TabItem[] = [
     { key: "overview", label: "Overview" },
     ...areaTabs,
-    { key: "risks", label: "Risks" },
+    { key: "risks", label: "Risk Assessment" },
+    { key: "medication-risk", label: "Medication Risk" },
     { key: "goals", label: "Goals" },
     { key: "reviews", label: "Reviews" },
     { key: "history", label: "History" },
@@ -481,13 +505,23 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
     return { ...s, risk: s.risk || undefined, responsible_staff_id: s.responsible_staff_id || null };
   }
 
+  function currentRiskAssessmentInputs(): CarePlanRiskAssessmentInput[] {
+    return (activePlan?.risk_assessments ?? []).map(toRiskAssessmentInput);
+  }
+
   // Throws on failure — each caller below decides what "stay open on error"
-  // means for its own UI (a drawer form vs. a confirm dialog).
-  async function submitAsNewVersion(newSections: CarePlanSectionInput[], planNotes: string) {
+  // means for its own UI (a drawer form vs. a confirm dialog). Risk
+  // assessments carry over from the active plan unless the caller replaces them.
+  async function submitAsNewVersion(
+    newSections: CarePlanSectionInput[],
+    planNotes: string,
+    newRiskAssessments: CarePlanRiskAssessmentInput[] = currentRiskAssessmentInputs(),
+  ) {
     await createCarePlan.mutateAsync({
       effective_from: todayIso(),
       notes: planNotes,
       sections: newSections.map(normalizeSection),
+      risk_assessments: newRiskAssessments.map(normalizeRiskAssessmentInput),
     });
     setViewingId(null);
   }
@@ -500,6 +534,7 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
         effective_from: effectiveFrom,
         notes,
         sections: sections.map(normalizeSection),
+        risk_assessments: currentRiskAssessmentInputs().map(normalizeRiskAssessmentInput),
       });
       setIsOpen(false);
       setViewingId(null);
@@ -546,6 +581,51 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
     }
   }
 
+  function openAddRisk(type: RiskAssessmentType) {
+    setEditingRiskId(null);
+    setRiskDraft(emptyRiskAssessmentInput(type));
+    setVersionError(null);
+    setRiskDrawerOpen(true);
+  }
+
+  function openEditRisk(ra: CarePlanRiskAssessment) {
+    setEditingRiskId(ra.id);
+    setRiskDraft(toRiskAssessmentInput(ra));
+    setVersionError(null);
+    setRiskDrawerOpen(true);
+  }
+
+  async function handleSaveRisk(event: FormEvent) {
+    event.preventDefault();
+    if (!activePlan) return;
+    setVersionError(null);
+
+    const existing = activePlan.risk_assessments ?? [];
+    const newRisks =
+      editingRiskId === null
+        ? [...existing.map(toRiskAssessmentInput), riskDraft]
+        : existing.map((ra) => (ra.id === editingRiskId ? riskDraft : toRiskAssessmentInput(ra)));
+    try {
+      await submitAsNewVersion(activePlan.sections.map(toCarePlanSectionInput), activePlan.notes ?? "", newRisks);
+      setRiskDrawerOpen(false);
+    } catch (err) {
+      setVersionError(apiErrorMessage(err, "Could not save this risk assessment. Please try again."));
+    }
+  }
+
+  async function handleConfirmRemoveRisk() {
+    if (!activePlan || !removingRisk) return;
+    setVersionError(null);
+
+    const newRisks = (activePlan.risk_assessments ?? []).filter((ra) => ra.id !== removingRisk.id).map(toRiskAssessmentInput);
+    try {
+      await submitAsNewVersion(activePlan.sections.map(toCarePlanSectionInput), activePlan.notes ?? "", newRisks);
+      setRemovingRisk(null);
+    } catch (err) {
+      setVersionError(apiErrorMessage(err, "Could not remove this risk assessment. Please try again."));
+    }
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -589,9 +669,21 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
             </span>
           )}
         </div>
-        <Button variant="secondary" onClick={openNewVersionDrawer}>
-          New Version
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {viewingPlan && (
+            <>
+              <Button variant="secondary" onClick={() => printCarePlan(viewingPlan, serviceUser)}>
+                Print / PDF
+              </Button>
+              <Button variant="secondary" onClick={() => downloadCarePlanWord(viewingPlan, serviceUser)}>
+                Download Word
+              </Button>
+            </>
+          )}
+          <Button variant="secondary" onClick={openNewVersionDrawer}>
+            New Version
+          </Button>
+        </div>
       </div>
 
       {!isViewingActivePlan && viewingPlan && (
@@ -627,7 +719,18 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
                   }}
                 />
               ))}
-          {activeTab === "risks" && <RisksTab sections={viewingPlan.sections} />}
+          {(activeTab === "risks" || activeTab === "medication-risk") && (
+            <RiskAssessmentList
+              type={activeTab === "risks" ? "general" : "medication"}
+              assessments={viewingPlan.risk_assessments ?? []}
+              canManage={canManageSections}
+              onAdd={() => openAddRisk(activeTab === "risks" ? "general" : "medication")}
+              onEdit={openEditRisk}
+              onRemove={setRemovingRisk}
+            >
+              {activeTab === "risks" && <AreaRiskLevels sections={viewingPlan.sections} />}
+            </RiskAssessmentList>
+          )}
           {activeTab === "goals" && <GoalsTab sections={viewingPlan.sections} />}
           {activeTab === "reviews" && <ReviewsTab sections={viewingPlan.sections} />}
           {activeTab === "history" && (
@@ -673,6 +776,12 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
           <div className="mb-2 mt-6 text-sm font-semibold text-ink">
             Sections {activePlan && "(pre-filled from the current active plan — edit what's changed)"}
           </div>
+          {(activePlan?.risk_assessments?.length ?? 0) > 0 && (
+            <p className="mb-3 text-xs text-inksoft">
+              The current plan's {activePlan?.risk_assessments?.length} risk assessment(s) carry over to this version — manage them from the
+              Risk Assessment and Medication Risk tabs.
+            </p>
+          )}
           {sections.map((section, index) => (
             <div key={index} className="mb-4 rounded-xl border border-line p-3">
               <SectionFormFields
@@ -740,6 +849,54 @@ export function CarePlanTab({ serviceUserId }: { serviceUserId: number }) {
           </div>
         </form>
       </Drawer>
+
+      <Drawer
+        isOpen={riskDrawerOpen}
+        onClose={() => {
+          setRiskDrawerOpen(false);
+          setVersionError(null);
+        }}
+        title={`${editingRiskId === null ? "Add" : "Edit"} ${riskDraft.type === "medication" ? "Medication Risk Assessment" : "Risk Assessment"}`}
+      >
+        <form onSubmit={handleSaveRisk}>
+          {versionError && (
+            <div className="mb-4">
+              <Alert tone="danger">{versionError}</Alert>
+            </div>
+          )}
+          <p className="mb-4 text-xs text-inksoft">
+            Saving creates a new care plan version with this change — the current version stays in history unchanged.
+          </p>
+          <RiskAssessmentFormFields value={riskDraft} onChange={(patch) => setRiskDraft((prev) => ({ ...prev, ...patch }))} staff={staff?.data} />
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <Button type="button" variant="secondary" onClick={() => setRiskDrawerOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={createCarePlan.isPending}>
+              Save as New Version
+            </Button>
+          </div>
+        </form>
+      </Drawer>
+
+      <ConfirmDialog
+        isOpen={Boolean(removingRisk)}
+        title="Remove risk assessment"
+        message={
+          removingRisk
+            ? `Remove "${removingRisk.hazard}" from the care plan? This creates a new version without it — the current version stays in history unchanged.`
+            : ""
+        }
+        confirmLabel="Remove"
+        tone="danger"
+        isLoading={createCarePlan.isPending}
+        error={versionError}
+        onConfirm={handleConfirmRemoveRisk}
+        onCancel={() => {
+          setRemovingRisk(null);
+          setVersionError(null);
+        }}
+      />
 
       <ConfirmDialog
         isOpen={Boolean(removingSection)}
