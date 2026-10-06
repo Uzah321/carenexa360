@@ -98,6 +98,39 @@ class ObservationTest extends TestCase
         $normal->assertCreated()->assertJsonPath('data.news2.total', 0)->assertJsonCount(0, 'data.alerts');
     }
 
+    public function test_diastolic_and_glucose_are_scored_outside_the_news2_total(): void
+    {
+        ['admin' => $admin, 'serviceUser' => $serviceUser] = $this->makeTenantWithServiceUser();
+
+        // Systolic 125 is NEWS2 0; diastolic 55 scores 1 on its own scale and
+        // must not leak into the NEWS2 total.
+        $bp = $this->actingAs($admin)->postJson("/api/v1/service-users/{$serviceUser->id}/observations", [
+            'type' => 'blood_pressure',
+            'value' => ['systolic' => 125, 'diastolic' => 55],
+        ]);
+        $bp->assertCreated()
+            ->assertJsonPath('data.news2.total', 0)
+            ->assertJsonPath('data.range_scores.0.parameter', 'diastolic')
+            ->assertJsonPath('data.range_scores.0.score', 1)
+            ->assertJsonPath('data.range_scores.0.direction', 'low')
+            ->assertJsonPath('data.alerts.0.severity', 'warning');
+        $this->assertStringContainsString('Low diastolic blood pressure', $bp->json('data.alerts.0.message'));
+
+        $hypo = $this->actingAs($admin)->postJson("/api/v1/service-users/{$serviceUser->id}/observations", [
+            'type' => 'blood_glucose',
+            'value' => ['value' => 48],
+        ]);
+        $hypo->assertCreated()
+            ->assertJsonPath('data.news2', null)
+            ->assertJsonPath('data.range_scores.0.score', 3)
+            ->assertJsonPath('data.alerts.0.severity', 'critical');
+
+        $this->actingAs($admin)->postJson("/api/v1/service-users/{$serviceUser->id}/observations", [
+            'type' => 'blood_glucose',
+            'value' => ['value' => 110],
+        ])->assertCreated()->assertJsonPath('data.range_scores.0.score', 0)->assertJsonCount(0, 'data.alerts');
+    }
+
     public function test_spo2_on_scale_2_does_not_flag_a_target_range_reading(): void
     {
         ['admin' => $admin, 'serviceUser' => $serviceUser] = $this->makeTenantWithServiceUser();

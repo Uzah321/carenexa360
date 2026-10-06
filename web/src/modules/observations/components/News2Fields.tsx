@@ -1,5 +1,5 @@
 import { Checkbox, FormField, Input, Select, StatusBadge } from "../../../design-system";
-import type { News2Assessment, ObservationType } from "../../../lib/types";
+import type { News2Assessment, News2Parameter, ObservationType } from "../../../lib/types";
 import { DEFAULT_UNITS, type ObservationDraft } from "../observationDraft";
 import {
   CONSCIOUSNESS_LABELS,
@@ -152,39 +152,94 @@ export function ObservationValueFields({
   );
 }
 
-/** Compact badge for a table row: "High · 2" for one parameter, "NEWS2 7 · High risk" for a set. */
-export function News2Badge({ assessment, isSet }: { assessment: News2Assessment | null | undefined; isSet: boolean }) {
-  if (!assessment) return null;
+function ScoreRow({ p }: { p: News2Parameter }) {
+  return (
+    <li className="flex items-center justify-between gap-3 py-1.5 text-sm">
+      <span className="text-ink">
+        {p.label} <span className="text-inksoft">— {p.reading}</span>
+      </span>
+      <StatusBadge label={`${directionLabel(p.direction)} · ${p.score}`} tone={scoreTone(p.score)} />
+    </li>
+  );
+}
 
-  if (isSet) {
+/**
+ * Compact badge for a table row: "High · NEWS2 2" for a single reading (or
+ * "Low · score 2" when the worst score is a non-NEWS2 one like glucose), and
+ * "NEWS2 7 · High risk" for a full set.
+ */
+export function News2Badge({
+  assessment,
+  rangeScores = [],
+  isSet,
+}: {
+  assessment: News2Assessment | null | undefined;
+  rangeScores?: News2Parameter[];
+  isSet: boolean;
+}) {
+  if (isSet && assessment) {
     return <StatusBadge label={`NEWS2 ${assessment.total} · ${RISK_LABELS[assessment.risk]}`} tone={riskTone(assessment.risk)} />;
   }
 
-  const worst = assessment.parameters.reduce((a, b) => (b.score > a.score ? b : a));
-  return <StatusBadge label={`${directionLabel(worst.direction)} · NEWS2 ${worst.score}`} tone={scoreTone(worst.score)} />;
+  const scored = [
+    ...(assessment?.parameters ?? []).map((p) => ({ ...p, scale: "NEWS2" })),
+    ...rangeScores.map((p) => ({ ...p, scale: "score" })),
+  ];
+  if (scored.length === 0) return null;
+
+  const worst = scored.reduce((a, b) => (b.score > a.score ? b : a));
+  return <StatusBadge label={`${directionLabel(worst.direction)} · ${worst.scale} ${worst.score}`} tone={scoreTone(worst.score)} />;
 }
 
 /** Per-parameter breakdown plus the escalation guidance. */
-export function News2Summary({ assessment, isSet }: { assessment: News2Assessment | null; isSet: boolean }) {
-  if (!assessment) return null;
+export function News2Summary({
+  assessment,
+  rangeScores = [],
+  isSet,
+}: {
+  assessment: News2Assessment | null;
+  rangeScores?: News2Parameter[];
+  isSet: boolean;
+}) {
+  if (!assessment && rangeScores.length === 0) return null;
+
+  const worstRange = Math.max(0, ...rangeScores.map((p) => p.score));
 
   return (
     <div className="mb-4 rounded-xl border border-line bg-paper p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-ink">{isSet ? `NEWS2 score: ${assessment.total}` : "NEWS2 assessment"}</span>
-        {isSet && <StatusBadge label={RISK_LABELS[assessment.risk]} tone={riskTone(assessment.risk)} />}
-      </div>
-      <ul className="divide-y divide-line">
-        {assessment.parameters.map((p) => (
-          <li key={p.parameter} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-            <span className="text-ink">
-              {p.label} <span className="text-inksoft">— {p.reading}</span>
-            </span>
-            <StatusBadge label={`${directionLabel(p.direction)} · ${p.score}`} tone={scoreTone(p.score)} />
-          </li>
-        ))}
-      </ul>
-      {(isSet || assessment.total > 0) && <p className="mt-2 text-xs text-inksoft">{assessment.response}</p>}
+      {assessment && (
+        <>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-ink">{isSet ? `NEWS2 score: ${assessment.total}` : "NEWS2 assessment"}</span>
+            {isSet && <StatusBadge label={RISK_LABELS[assessment.risk]} tone={riskTone(assessment.risk)} />}
+          </div>
+          <ul className="divide-y divide-line">
+            {assessment.parameters.map((p) => (
+              <ScoreRow key={p.parameter} p={p} />
+            ))}
+          </ul>
+          {(isSet || assessment.total > 0) && <p className="mt-2 text-xs text-inksoft">{assessment.response}</p>}
+        </>
+      )}
+      {rangeScores.length > 0 && (
+        <>
+          <p className={`text-sm font-semibold text-ink ${assessment ? "mt-3" : "mb-2"}`}>
+            {assessment ? "Not part of NEWS2" : "Range assessment"}
+          </p>
+          <ul className="divide-y divide-line">
+            {rangeScores.map((p) => (
+              <ScoreRow key={p.parameter} p={p} />
+            ))}
+          </ul>
+          {worstRange > 0 && (
+            <p className="mt-2 text-xs text-inksoft">
+              {worstRange >= 3
+                ? "Red zone — seek urgent clinical advice (GP or NHS 111), or call 999 if the person is unwell."
+                : "Outside the normal range — inform the senior carer / nurse."}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

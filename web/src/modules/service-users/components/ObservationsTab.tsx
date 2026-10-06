@@ -29,6 +29,7 @@ import { ObservationTrendChart } from "../../observations/components/Observation
 import { News2Badge, News2Summary, ObservationValueFields } from "../../observations/components/News2Fields";
 import { DEFAULT_UNITS, draftToValue, valueToDraft, type ObservationDraft } from "../../observations/observationDraft";
 import { assessNews2 } from "../../observations/news2";
+import { rangeScores } from "../../observations/rangeScores";
 import { OBSERVATION_TYPES, type Observation, type ObservationType } from "../../../lib/types";
 
 function labelFor(type: ObservationType): string {
@@ -79,6 +80,11 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
   }, [observations]);
 
   const livePreview = useMemo(() => assessNews2(formType, draftToValue(formType, draft)), [formType, draft]);
+  const liveRangeScores = useMemo(() => rangeScores(formType, draftToValue(formType, draft)), [formType, draft]);
+  const editRangeScores = useMemo(
+    () => (editingObservation ? rangeScores(editingObservation.type, draftToValue(editingObservation.type, editDraft)) : []),
+    [editingObservation, editDraft],
+  );
   const editPreview = useMemo(
     () => (editingObservation ? assessNews2(editingObservation.type, draftToValue(editingObservation.type, editDraft)) : null),
     [editingObservation, editDraft],
@@ -164,7 +170,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
     {
       key: "news2",
       header: "Status",
-      render: (row) => <News2Badge assessment={row.news2} isSet={row.type === "news2"} />,
+      render: (row) => <News2Badge assessment={row.news2} rangeScores={row.range_scores} isSet={row.type === "news2"} />,
     },
     { key: "recorded_by", header: "Recorded By", render: (row) => row.recorded_by_name ?? "—" },
     {
@@ -305,7 +311,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
             onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
           />
 
-          <News2Summary assessment={livePreview} isSet={formType === "news2"} />
+          <News2Summary assessment={livePreview} rangeScores={liveRangeScores} isSet={formType === "news2"} />
 
           <FormField label="Notes" htmlFor="observation-notes">
             <Textarea id="observation-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -345,7 +351,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
               onChange={(patch) => setEditDraft((prev) => ({ ...prev, ...patch }))}
             />
           )}
-          <News2Summary assessment={editPreview} isSet={editingObservation?.type === "news2"} />
+          <News2Summary assessment={editPreview} rangeScores={editRangeScores} isSet={editingObservation?.type === "news2"} />
           <FormField label="Notes" htmlFor="edit-observation-notes">
             <Textarea id="edit-observation-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
           </FormField>
@@ -382,7 +388,11 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
                 <dd className="font-medium text-ink">{viewingObservation.notes ?? "—"}</dd>
               </div>
             </dl>
-            <News2Summary assessment={viewingObservation.news2 ?? null} isSet={viewingObservation.type === "news2"} />
+            <News2Summary
+              assessment={viewingObservation.news2 ?? null}
+              rangeScores={viewingObservation.range_scores}
+              isSet={viewingObservation.type === "news2"}
+            />
           </>
         )}
       </Modal>

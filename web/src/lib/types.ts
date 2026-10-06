@@ -583,6 +583,8 @@ export interface Observation {
   notes: string | null;
   archived_at: string | null;
   news2?: News2Assessment | null;
+  /** 0–3 scores for measurements outside NEWS2 (diastolic BP, glucose) — not part of the NEWS2 total. */
+  range_scores?: News2Parameter[];
   alerts?: ClinicalAlert[];
   created_at: string;
 }
