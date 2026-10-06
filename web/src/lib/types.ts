@@ -83,6 +83,7 @@ export interface ServiceUser {
   last_name: string;
   preferred_name: string | null;
   date_of_birth: string | null;
+  nhs_number: string | null;
   gender: string | null;
   language: string | null;
   phone: string | null;
@@ -191,10 +192,78 @@ export interface CarePlan {
   created_by: number | null;
   created_by_name?: string | null;
   notes: string | null;
+  home_care_plan: HomeCarePlan | null;
   sections: CarePlanSection[];
   risk_assessments?: CarePlanRiskAssessment[];
   created_at: string;
 }
+
+// The narrative "Home Care Plan" on each version. Mirrors
+// api/app/Modules/CarePlanning/Support/HomeCarePlan.php.
+export const HOME_CARE_PLAN_NEED_AREAS = [
+  "personal_care",
+  "continence",
+  "mobility",
+  "meals",
+  "medication",
+  "support",
+  "other_support",
+  "advance_support",
+  "final_days",
+] as const;
+export type HomeCarePlanNeedArea = (typeof HOME_CARE_PLAN_NEED_AREAS)[number];
+
+export const HOME_CARE_PLAN_SUMMARIES = [
+  "personal_needs",
+  "meal_requirements",
+  "dietary_needs",
+  "household_support",
+  "continence",
+  "medication",
+  "mobility",
+  "mobility_aids",
+  "other_support_needs",
+] as const;
+export type HomeCarePlanSummaryKey = (typeof HOME_CARE_PLAN_SUMMARIES)[number];
+
+export interface HomeCarePlanNeed {
+  /** Rich text (sanitised HTML). */
+  details: string | null;
+  /** null = consent not recorded. */
+  consented: boolean | null;
+}
+
+export interface HomeCarePlan {
+  about_me?: string | null;
+  desired_outcomes?: string | null;
+  goals_and_outcomes?: string | null;
+  cognitive_impairment_summary?: string | null;
+  cognitive_impairment?: string | null;
+  needs?: Partial<Record<HomeCarePlanNeedArea, HomeCarePlanNeed>>;
+  summaries?: Partial<Record<HomeCarePlanSummaryKey, string>>;
+}
+
+export const RISK_TYPES = [
+  "falls",
+  "moving_and_handling",
+  "pressure_ulcers",
+  "choking",
+  "nutrition_and_hydration",
+  "medication",
+  "infection_control",
+  "environment",
+  "fire",
+  "self_neglect",
+  "behaviour_that_challenges",
+  "wandering",
+  "self_harm",
+  "safeguarding_and_abuse",
+  "financial",
+  "lone_working",
+  "equipment",
+  "other",
+] as const;
+export type RiskType = (typeof RISK_TYPES)[number];
 
 export const RISK_ASSESSMENT_TYPES = ["general", "medication"] as const;
 export type RiskAssessmentType = (typeof RISK_ASSESSMENT_TYPES)[number];
@@ -232,7 +301,11 @@ export interface CarePlanRiskAssessment {
   id: number;
   type: RiskAssessmentType;
   area: CarePlanArea | null;
+  risk_type: RiskType | null;
   hazard: string;
+  /** Rich text (sanitised HTML). */
+  details: string | null;
+  triggers: string | null;
   persons_at_risk: PersonAtRisk[];
   harm_description: string | null;
   likelihood: number | null;
@@ -243,6 +316,13 @@ export interface CarePlanRiskAssessment {
   residual_likelihood: number | null;
   residual_severity: number | null;
   residual_risk_score: number | null;
+  /** The score the plan is aiming for. */
+  target_likelihood: number | null;
+  target_severity: number | null;
+  target_risk_score: number | null;
+  contingency_plan_required: boolean;
+  /** Rich text (sanitised HTML). */
+  contingency_plan: string | null;
   action_owner_id: number | null;
   action_owner_name?: string | null;
   action_due_date: string | null;

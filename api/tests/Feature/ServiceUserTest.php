@@ -46,6 +46,7 @@ class ServiceUserTest extends TestCase
             'last_name' => 'Smith',
             'referring_hospital' => 'Parirenyatwa Group of Hospitals',
             'hospital_record_number' => 'PGH-00123',
+            'nhs_number' => '462 423 5614',
             'discharge_date' => '2026-09-01',
             'discharge_summary' => 'Discharged post-hip-fracture surgery; needs mobility support and pain review.',
         ]);
@@ -53,6 +54,7 @@ class ServiceUserTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.referring_hospital', 'Parirenyatwa Group of Hospitals')
             ->assertJsonPath('data.hospital_record_number', 'PGH-00123')
+            ->assertJsonPath('data.nhs_number', '462 423 5614')
             ->assertJsonPath('data.discharge_date', '2026-09-01')
             ->assertJsonPath(
                 'data.discharge_summary',

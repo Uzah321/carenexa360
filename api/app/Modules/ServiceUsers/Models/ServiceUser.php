@@ -36,6 +36,7 @@ class ServiceUser extends Model
         'last_name',
         'preferred_name',
         'date_of_birth',
+        'nhs_number',
         'gender',
         'language',
         'phone',

@@ -26,6 +26,8 @@ import {
 import { emptyRiskAssessmentInput, normalizeRiskAssessmentInput, toRiskAssessmentInput } from "../../care-planning/risk";
 import { downloadCarePlanWord, printCarePlan } from "../../care-planning/carePlanExport";
 import { RiskAssessmentFormFields, RiskAssessmentList } from "./RiskAssessmentPanels";
+import { HomeCarePlanFormFields, HomeCarePlanView } from "./HomeCarePlanPanel";
+import { emptyHomeCarePlan } from "../../care-planning/homeCarePlan";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { useStaff } from "../../staff/api";
 import {
@@ -35,6 +37,7 @@ import {
   type CarePlanRiskAssessment,
   type CarePlanRiskLevel,
   type CarePlanSection,
+  type HomeCarePlan,
   type RiskAssessmentType,
   type ServiceUser,
   type StaffMember,
@@ -460,6 +463,8 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
   const [editingRiskId, setEditingRiskId] = useState<number | null>(null);
   const [riskDraft, setRiskDraft] = useState<CarePlanRiskAssessmentInput>(emptyRiskAssessmentInput("general"));
   const [removingRisk, setRemovingRisk] = useState<CarePlanRiskAssessment | null>(null);
+  const [homeCarePlanOpen, setHomeCarePlanOpen] = useState(false);
+  const [homeCarePlanDraft, setHomeCarePlanDraft] = useState<HomeCarePlan>(emptyHomeCarePlan());
   // Shared by every caller of submitAsNewVersion — New Version, Edit Section,
   // and Remove Section — since only one of those drawers/dialogs is ever open
   // at once.
@@ -477,6 +482,7 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
 
   const tabItems: TabItem[] = [
     { key: "overview", label: "Overview" },
+    { key: "home-care-plan", label: "Home Care Plan" },
     ...areaTabs,
     { key: "risks", label: "Risk Assessment" },
     { key: "medication-risk", label: "Medication Risk" },
@@ -511,15 +517,18 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
 
   // Throws on failure — each caller below decides what "stay open on error"
   // means for its own UI (a drawer form vs. a confirm dialog). Risk
-  // assessments carry over from the active plan unless the caller replaces them.
+  // assessments and the home care plan carry over from the active plan
+  // unless the caller replaces them.
   async function submitAsNewVersion(
     newSections: CarePlanSectionInput[],
     planNotes: string,
     newRiskAssessments: CarePlanRiskAssessmentInput[] = currentRiskAssessmentInputs(),
+    homeCarePlan: HomeCarePlan | null = activePlan?.home_care_plan ?? null,
   ) {
     await createCarePlan.mutateAsync({
       effective_from: todayIso(),
       notes: planNotes,
+      home_care_plan: homeCarePlan,
       sections: newSections.map(normalizeSection),
       risk_assessments: newRiskAssessments.map(normalizeRiskAssessmentInput),
     });
@@ -533,6 +542,7 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
       await createCarePlan.mutateAsync({
         effective_from: effectiveFrom,
         notes,
+        home_care_plan: activePlan?.home_care_plan ?? null,
         sections: sections.map(normalizeSection),
         risk_assessments: currentRiskAssessmentInputs().map(normalizeRiskAssessmentInput),
       });
@@ -610,6 +620,24 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
       setRiskDrawerOpen(false);
     } catch (err) {
       setVersionError(apiErrorMessage(err, "Could not save this risk assessment. Please try again."));
+    }
+  }
+
+  function openHomeCarePlan() {
+    setHomeCarePlanDraft(structuredClone(activePlan?.home_care_plan ?? emptyHomeCarePlan()));
+    setVersionError(null);
+    setHomeCarePlanOpen(true);
+  }
+
+  async function handleSaveHomeCarePlan(event: FormEvent) {
+    event.preventDefault();
+    if (!activePlan) return;
+    setVersionError(null);
+    try {
+      await submitAsNewVersion(activePlan.sections.map(toCarePlanSectionInput), activePlan.notes ?? "", undefined, homeCarePlanDraft);
+      setHomeCarePlanOpen(false);
+    } catch (err) {
+      setVersionError(apiErrorMessage(err, "Could not save the home care plan. Please try again."));
     }
   }
 
@@ -702,6 +730,15 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
               canRemove={canRemoveSection}
               onEdit={openEditSection}
               onRemove={setRemovingSection}
+            />
+          )}
+          {activeTab === "home-care-plan" && (
+            <HomeCarePlanView
+              plan={viewingPlan.home_care_plan}
+              riskCount={(viewingPlan.risk_assessments ?? []).length}
+              canManage={canManageSections}
+              onEdit={openHomeCarePlan}
+              onViewRisks={() => setActiveTab("risks")}
             />
           )}
           {areaTabs.some((t) => t.key === activeTab) &&
@@ -867,9 +904,54 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
           <p className="mb-4 text-xs text-inksoft">
             Saving creates a new care plan version with this change — the current version stays in history unchanged.
           </p>
-          <RiskAssessmentFormFields value={riskDraft} onChange={(patch) => setRiskDraft((prev) => ({ ...prev, ...patch }))} staff={staff?.data} />
+          <RiskAssessmentFormFields
+            value={riskDraft}
+            onChange={(patch) => setRiskDraft((prev) => ({ ...prev, ...patch }))}
+            staff={staff?.data}
+            serviceUser={serviceUser}
+          />
           <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              className="mr-auto"
+              onClick={() => {
+                const original = (activePlan?.risk_assessments ?? []).find((ra) => ra.id === editingRiskId);
+                setRiskDraft(original ? toRiskAssessmentInput(original) : emptyRiskAssessmentInput(riskDraft.type));
+              }}
+            >
+              Reset
+            </Button>
             <Button type="button" variant="secondary" onClick={() => setRiskDrawerOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={createCarePlan.isPending}>
+              Save as New Version
+            </Button>
+          </div>
+        </form>
+      </Drawer>
+
+      <Drawer
+        isOpen={homeCarePlanOpen}
+        onClose={() => {
+          setHomeCarePlanOpen(false);
+          setVersionError(null);
+        }}
+        title="Home Care Plan"
+      >
+        <form onSubmit={handleSaveHomeCarePlan}>
+          {versionError && (
+            <div className="mb-4">
+              <Alert tone="danger">{versionError}</Alert>
+            </div>
+          )}
+          <p className="mb-4 text-xs text-inksoft">
+            Saving creates a new care plan version with this change — the current version stays in history unchanged.
+          </p>
+          <HomeCarePlanFormFields value={homeCarePlanDraft} onChange={setHomeCarePlanDraft} />
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <Button type="button" variant="secondary" onClick={() => setHomeCarePlanOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" isLoading={createCarePlan.isPending}>

@@ -4,6 +4,7 @@ import type {
   MedicationSupportLevel,
   PersonAtRisk,
   RiskAssessmentType,
+  RiskType,
 } from "../../lib/types";
 
 // 5×5 likelihood × severity matrix — the scale most UK care providers use
@@ -22,6 +23,27 @@ export const SEVERITY_LABELS: Record<number, string> = {
   3: "Moderate",
   4: "Major",
   5: "Catastrophic",
+};
+
+export const RISK_TYPE_LABELS: Record<RiskType, string> = {
+  falls: "Falls",
+  moving_and_handling: "Moving and handling",
+  pressure_ulcers: "Pressure ulcers / skin integrity",
+  choking: "Choking / swallowing",
+  nutrition_and_hydration: "Nutrition and hydration",
+  medication: "Medication",
+  infection_control: "Infection control",
+  environment: "Home environment",
+  fire: "Fire safety",
+  self_neglect: "Self-neglect",
+  behaviour_that_challenges: "Behaviour that challenges",
+  wandering: "Wandering / leaving home",
+  self_harm: "Self-harm",
+  safeguarding_and_abuse: "Safeguarding / abuse",
+  financial: "Financial",
+  lone_working: "Lone working (staff)",
+  equipment: "Equipment",
+  other: "Other",
 };
 
 export const PERSON_AT_RISK_LABELS: Record<PersonAtRisk, string> = {
@@ -89,7 +111,10 @@ export function emptyRiskAssessmentInput(type: RiskAssessmentType): CarePlanRisk
   return {
     type,
     area: type === "medication" ? "medication" : "",
+    risk_type: type === "medication" ? "medication" : "",
     hazard: "",
+    details: "",
+    triggers: "",
     persons_at_risk: ["service_user"],
     harm_description: "",
     likelihood: null,
@@ -98,6 +123,10 @@ export function emptyRiskAssessmentInput(type: RiskAssessmentType): CarePlanRisk
     further_actions: "",
     residual_likelihood: null,
     residual_severity: null,
+    target_likelihood: null,
+    target_severity: null,
+    contingency_plan_required: false,
+    contingency_plan: "",
     action_owner_id: null,
     action_due_date: "",
     review_date: "",
@@ -109,7 +138,10 @@ export function toRiskAssessmentInput(ra: CarePlanRiskAssessment): CarePlanRiskA
   return {
     type: ra.type,
     area: ra.area ?? "",
+    risk_type: ra.risk_type ?? "",
     hazard: ra.hazard,
+    details: ra.details ?? "",
+    triggers: ra.triggers ?? "",
     persons_at_risk: ra.persons_at_risk ?? [],
     harm_description: ra.harm_description ?? "",
     likelihood: ra.likelihood,
@@ -118,6 +150,10 @@ export function toRiskAssessmentInput(ra: CarePlanRiskAssessment): CarePlanRiskA
     further_actions: ra.further_actions ?? "",
     residual_likelihood: ra.residual_likelihood,
     residual_severity: ra.residual_severity,
+    target_likelihood: ra.target_likelihood,
+    target_severity: ra.target_severity,
+    contingency_plan_required: ra.contingency_plan_required,
+    contingency_plan: ra.contingency_plan ?? "",
     action_owner_id: ra.action_owner_id,
     action_due_date: ra.action_due_date ?? "",
     review_date: ra.review_date ?? "",
@@ -130,9 +166,13 @@ export function normalizeRiskAssessmentInput(ra: CarePlanRiskAssessmentInput): C
   return {
     ...ra,
     area: ra.area || null,
+    risk_type: ra.risk_type || null,
+    details: ra.details || null,
+    triggers: ra.triggers || null,
     harm_description: ra.harm_description || null,
     existing_controls: ra.existing_controls || null,
     further_actions: ra.further_actions || null,
+    contingency_plan: ra.contingency_plan_required ? ra.contingency_plan || null : null,
     action_due_date: ra.action_due_date || null,
     review_date: ra.review_date || null,
     medication_details: ra.type === "medication" ? ra.medication_details : null,

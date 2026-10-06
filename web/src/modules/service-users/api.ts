@@ -9,6 +9,7 @@ export interface ServiceUserInput {
   last_name: string;
   preferred_name?: string | null;
   date_of_birth?: string | null;
+  nhs_number?: string | null;
   gender?: string | null;
   language?: string | null;
   phone?: string | null;

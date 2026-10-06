@@ -1,5 +1,20 @@
 import type { ReactNode } from "react";
-import { Button, Card, CardBody, CardHeader, Checkbox, EmptyState, FormField, Input, RowActionsMenu, Select, StatusBadge, Textarea } from "../../../design-system";
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Checkbox,
+  EmptyState,
+  FormField,
+  Input,
+  RichTextEditor,
+  RichTextView,
+  RowActionsMenu,
+  Select,
+  StatusBadge,
+  Textarea,
+} from "../../../design-system";
 import type { CarePlanRiskAssessmentInput } from "../../care-planning/api";
 import {
   COMMON_MEDICATION_HAZARDS,
@@ -8,6 +23,7 @@ import {
   PERSON_AT_RISK_LABELS,
   RISK_RATING_LABELS,
   RISK_RATING_TONE,
+  RISK_TYPE_LABELS,
   SEVERITY_LABELS,
   riskRating,
   riskScore,
@@ -16,10 +32,13 @@ import {
   CARE_PLAN_AREAS,
   MEDICATION_SUPPORT_LEVELS,
   PERSONS_AT_RISK,
+  RISK_TYPES,
   type CarePlanRiskAssessment,
   type MedicationRiskDetails,
   type MedicationSupportLevel,
   type RiskAssessmentType,
+  type RiskType,
+  type ServiceUser,
   type StaffMember,
 } from "../../../lib/types";
 import { todayIso } from "../../../lib/dates";
@@ -129,13 +148,21 @@ function RiskAssessmentCard({
           <div className="min-w-0">
             {med?.medication_name && <p className="text-xs font-semibold uppercase tracking-wide text-teal">{med.medication_name}</p>}
             <p className="font-display text-base font-bold text-ink">{ra.hazard}</p>
-            {ra.area && <p className="text-xs capitalize text-inksoft">{areaLabel(ra.area)}</p>}
+            <p className="text-xs text-inksoft">
+              {[ra.risk_type ? RISK_TYPE_LABELS[ra.risk_type] : null, ra.area ? areaLabel(ra.area) : null].filter(Boolean).join(" · ")}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-inksoft">Initial</span>
             <RiskScoreBadge likelihood={ra.likelihood} severity={ra.severity} />
             <span className="text-xs text-inksoft">→ Residual</span>
             <RiskScoreBadge likelihood={ra.residual_likelihood} severity={ra.residual_severity} />
+            {(ra.target_likelihood || ra.target_severity) && (
+              <>
+                <span className="text-xs text-inksoft">Target</span>
+                <RiskScoreBadge likelihood={ra.target_likelihood} severity={ra.target_severity} />
+              </>
+            )}
             {canManage && (
               <RowActionsMenu
                 label={`${ra.hazard} actions`}
@@ -149,7 +176,14 @@ function RiskAssessmentCard({
         </div>
       </CardHeader>
       <CardBody>
+        {ra.details && (
+          <div className="mb-5">
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-inksoft">Risk details</h4>
+            <RichTextView value={ra.details} />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label="Risk triggers" value={ra.triggers} />
           <Field label="Who might be harmed" value={ra.persons_at_risk.map((p) => PERSON_AT_RISK_LABELS[p]).join(", ") || null} />
           <Field label="How they might be harmed" value={ra.harm_description} />
           {med && (
@@ -171,6 +205,12 @@ function RiskAssessmentCard({
           <Field label="Existing control measures" value={ra.existing_controls} />
           <Field label="Further action required" value={ra.further_actions} />
         </div>
+        {ra.contingency_plan_required && (
+          <div className="mt-5 rounded-xl border border-amber/30 bg-ambertint/40 p-3">
+            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber">Safety / contingency plan</h4>
+            {ra.contingency_plan ? <RichTextView value={ra.contingency_plan} /> : <p className="text-sm text-inksoft">Required — not yet written.</p>}
+          </div>
+        )}
         <div className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:grid-cols-3">
           <div>
             <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-inksoft">Action by</h4>
@@ -278,10 +318,12 @@ export function RiskAssessmentFormFields({
   value,
   onChange,
   staff,
+  serviceUser,
 }: {
   value: CarePlanRiskAssessmentInput;
   onChange: (patch: Partial<CarePlanRiskAssessmentInput>) => void;
   staff: StaffMember[] | undefined;
+  serviceUser?: ServiceUser;
 }) {
   const isMedication = value.type === "medication";
   const med: MedicationRiskDetails = value.medication_details ?? {};
@@ -295,6 +337,14 @@ export function RiskAssessmentFormFields({
 
   return (
     <>
+      {serviceUser && (
+        <p className="mb-4 text-base font-semibold text-ink">
+          {serviceUser.first_name} {serviceUser.last_name}{" "}
+          <span className="text-sm font-normal text-inksoft">
+            ({[serviceUser.date_of_birth, serviceUser.nhs_number ? `NHS ${serviceUser.nhs_number}` : null].filter(Boolean).join(" / ") || "no DOB or NHS number recorded"})
+          </span>
+        </p>
+      )}
       {isMedication && (
         <>
           <h3 className="mb-2 text-sm font-semibold text-ink">Medication</h3>
@@ -379,22 +429,37 @@ export function RiskAssessmentFormFields({
       )}
 
       {!isMedication && (
-        <FormField label="Care plan area" htmlFor="ra-area">
-          <Select id="ra-area" value={value.area} onChange={(e) => onChange({ area: e.target.value as CarePlanRiskAssessmentInput["area"] })}>
-            <option value="">General / not area-specific</option>
-            {CARE_PLAN_AREAS.map((area) => (
-              <option key={area} value={area}>
-                {areaLabel(area)}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField label="Risk type *" htmlFor="ra-risk-type">
+            <Select id="ra-risk-type" required value={value.risk_type} onChange={(e) => onChange({ risk_type: e.target.value as RiskType | "" })}>
+              <option value="" disabled>
+                Select risk type
               </option>
-            ))}
-          </Select>
-        </FormField>
+              {RISK_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {RISK_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Care plan area" htmlFor="ra-area">
+            <Select id="ra-area" value={value.area} onChange={(e) => onChange({ area: e.target.value as CarePlanRiskAssessmentInput["area"] })}>
+              <option value="">General / not area-specific</option>
+              {CARE_PLAN_AREAS.map((area) => (
+                <option key={area} value={area}>
+                  {areaLabel(area)}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        </div>
       )}
 
-      <FormField label="Hazard — what could go wrong?" htmlFor="ra-hazard">
+      <FormField label="Risk name — what could go wrong? *" htmlFor="ra-hazard">
         <Input
           id="ra-hazard"
           required
+          placeholder="Name of the risk"
           list={isMedication ? "ra-medication-hazards" : undefined}
           value={value.hazard}
           onChange={(e) => onChange({ hazard: e.target.value })}
@@ -406,6 +471,26 @@ export function RiskAssessmentFormFields({
             ))}
           </datalist>
         )}
+      </FormField>
+
+      <FormField label="Risk details" htmlFor="ra-details">
+        <RichTextEditor
+          id="ra-details"
+          aria-label="Risk details"
+          value={value.details}
+          template="<p><b>What the risk is:</b> </p><p><b>History / previous incidents:</b> </p><p><b>Current situation:</b> </p>"
+          onChange={(details) => onChange({ details })}
+        />
+      </FormField>
+
+      <FormField label="Risk triggers" htmlFor="ra-triggers">
+        <Textarea
+          id="ra-triggers"
+          rows={2}
+          placeholder="What makes this risk more likely — times, situations, signs to watch for"
+          value={value.triggers}
+          onChange={(e) => onChange({ triggers: e.target.value })}
+        />
       </FormField>
 
       <fieldset className="mb-4">
@@ -461,6 +546,46 @@ export function RiskAssessmentFormFields({
       <p className="-mt-2 mb-4 text-xs text-inksoft">
         Residual risk: <RiskScoreBadge likelihood={value.residual_likelihood} severity={value.residual_severity} />
       </p>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ScoreSelect
+          id="ra-target-likelihood"
+          label="Target likelihood"
+          value={value.target_likelihood}
+          labels={LIKELIHOOD_LABELS}
+          onChange={(target_likelihood) => onChange({ target_likelihood })}
+        />
+        <ScoreSelect
+          id="ra-target-severity"
+          label="Target severity"
+          value={value.target_severity}
+          labels={SEVERITY_LABELS}
+          onChange={(target_severity) => onChange({ target_severity })}
+        />
+      </div>
+      <p className="-mt-2 mb-4 text-xs text-inksoft">
+        Target risk — the level this plan is aiming for: <RiskScoreBadge likelihood={value.target_likelihood} severity={value.target_severity} />
+      </p>
+
+      <div className="mb-4">
+        <Checkbox
+          id="ra-contingency-required"
+          label="A safety / contingency plan is required for this risk"
+          checked={value.contingency_plan_required}
+          onChange={(e) => onChange({ contingency_plan_required: e.target.checked })}
+        />
+      </div>
+      {value.contingency_plan_required && (
+        <FormField label="Safety / contingency plan" htmlFor="ra-contingency">
+          <RichTextEditor
+            id="ra-contingency"
+            aria-label="Safety / contingency plan"
+            value={value.contingency_plan}
+            template="<p><b>If this happens:</b> </p><p><b>Immediate actions:</b> </p><p><b>Who to contact:</b> </p><p><b>Out of hours:</b> </p>"
+            onChange={(contingency_plan) => onChange({ contingency_plan })}
+          />
+        </FormField>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <FormField label="Action by" htmlFor="ra-owner">

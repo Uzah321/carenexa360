@@ -4,6 +4,7 @@ namespace App\Modules\CarePlanning\Http\Requests;
 
 use App\Modules\CarePlanning\Models\CarePlanRiskAssessment;
 use App\Modules\CarePlanning\Models\CarePlanSection;
+use App\Modules\CarePlanning\Support\HomeCarePlan;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,6 +27,7 @@ class StoreCarePlanRequest extends FormRequest
         return [
             'effective_from' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
+            ...HomeCarePlan::rules(),
             'sections' => ['required', 'array', 'min:1'],
             'sections.*.area' => ['required', 'string', Rule::in(CarePlanSection::AREAS)],
             'sections.*.identified_need' => ['required', 'string'],
@@ -49,7 +51,10 @@ class StoreCarePlanRequest extends FormRequest
             'risk_assessments' => ['nullable', 'array'],
             'risk_assessments.*.type' => ['required', 'string', Rule::in(CarePlanRiskAssessment::TYPES)],
             'risk_assessments.*.area' => ['nullable', 'string', Rule::in(CarePlanSection::AREAS)],
+            'risk_assessments.*.risk_type' => ['nullable', 'string', Rule::in(CarePlanRiskAssessment::RISK_TYPES)],
             'risk_assessments.*.hazard' => ['required', 'string'],
+            'risk_assessments.*.details' => ['nullable', 'string', 'max:50000'],
+            'risk_assessments.*.triggers' => ['nullable', 'string'],
             'risk_assessments.*.persons_at_risk' => ['nullable', 'array'],
             'risk_assessments.*.persons_at_risk.*' => ['string', Rule::in(CarePlanRiskAssessment::PERSONS_AT_RISK)],
             'risk_assessments.*.harm_description' => ['nullable', 'string'],
@@ -59,6 +64,10 @@ class StoreCarePlanRequest extends FormRequest
             'risk_assessments.*.further_actions' => ['nullable', 'string'],
             'risk_assessments.*.residual_likelihood' => ['nullable', 'integer', 'between:1,5'],
             'risk_assessments.*.residual_severity' => ['nullable', 'integer', 'between:1,5'],
+            'risk_assessments.*.target_likelihood' => ['nullable', 'integer', 'between:1,5'],
+            'risk_assessments.*.target_severity' => ['nullable', 'integer', 'between:1,5'],
+            'risk_assessments.*.contingency_plan_required' => ['nullable', 'boolean'],
+            'risk_assessments.*.contingency_plan' => ['nullable', 'string', 'max:50000'],
             'risk_assessments.*.action_owner_id' => [
                 'nullable',
                 'integer',

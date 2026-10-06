@@ -18,6 +18,7 @@ class ServiceUserResource extends JsonResource
             'last_name' => $this->last_name,
             'preferred_name' => $this->preferred_name,
             'date_of_birth' => $this->date_of_birth?->toDateString(),
+            'nhs_number' => $this->nhs_number,
             'gender' => $this->gender,
             'language' => $this->language,
             'phone' => $this->phone,

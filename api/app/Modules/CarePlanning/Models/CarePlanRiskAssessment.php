@@ -14,6 +14,28 @@ class CarePlanRiskAssessment extends Model
 
     public const TYPES = ['general', 'medication'];
 
+    /** Category of risk — mirrored in web/src/modules/care-planning/risk.ts. */
+    public const RISK_TYPES = [
+        'falls',
+        'moving_and_handling',
+        'pressure_ulcers',
+        'choking',
+        'nutrition_and_hydration',
+        'medication',
+        'infection_control',
+        'environment',
+        'fire',
+        'self_neglect',
+        'behaviour_that_challenges',
+        'wandering',
+        'self_harm',
+        'safeguarding_and_abuse',
+        'financial',
+        'lone_working',
+        'equipment',
+        'other',
+    ];
+
     public const PERSONS_AT_RISK = [
         'service_user',
         'care_staff',
@@ -46,7 +68,10 @@ class CarePlanRiskAssessment extends Model
         'care_plan_id',
         'type',
         'area',
+        'risk_type',
         'hazard',
+        'details',
+        'triggers',
         'persons_at_risk',
         'harm_description',
         'likelihood',
@@ -55,6 +80,10 @@ class CarePlanRiskAssessment extends Model
         'further_actions',
         'residual_likelihood',
         'residual_severity',
+        'target_likelihood',
+        'target_severity',
+        'contingency_plan_required',
+        'contingency_plan',
         'action_owner_id',
         'action_due_date',
         'review_date',
@@ -70,6 +99,9 @@ class CarePlanRiskAssessment extends Model
             'severity' => 'integer',
             'residual_likelihood' => 'integer',
             'residual_severity' => 'integer',
+            'target_likelihood' => 'integer',
+            'target_severity' => 'integer',
+            'contingency_plan_required' => 'boolean',
             'action_due_date' => 'date',
             'review_date' => 'date',
         ];
@@ -84,6 +116,13 @@ class CarePlanRiskAssessment extends Model
     {
         return $this->residual_likelihood && $this->residual_severity
             ? $this->residual_likelihood * $this->residual_severity
+            : null;
+    }
+
+    public function targetRiskScore(): ?int
+    {
+        return $this->target_likelihood && $this->target_severity
+            ? $this->target_likelihood * $this->target_severity
             : null;
     }
 

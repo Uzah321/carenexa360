@@ -205,6 +205,7 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
   const [draft, setDraft] = useState({
     preferred_name: serviceUser.preferred_name ?? "",
     date_of_birth: serviceUser.date_of_birth ?? "",
+    nhs_number: serviceUser.nhs_number ?? "",
     gender: serviceUser.gender ?? "",
     language: serviceUser.language ?? "",
     phone: serviceUser.phone ?? "",
@@ -217,6 +218,7 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
     setDraft({
       preferred_name: serviceUser.preferred_name ?? "",
       date_of_birth: serviceUser.date_of_birth ?? "",
+      nhs_number: serviceUser.nhs_number ?? "",
       gender: serviceUser.gender ?? "",
       language: serviceUser.language ?? "",
       phone: serviceUser.phone ?? "",
@@ -235,6 +237,7 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
       await updateServiceUser.mutateAsync({
         preferred_name: draft.preferred_name || null,
         date_of_birth: draft.date_of_birth || null,
+        nhs_number: draft.nhs_number || null,
         gender: draft.gender || null,
         language: draft.language || null,
         phone: draft.phone || null,
@@ -266,14 +269,24 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
               onChange={(e) => setDraft({ ...draft, preferred_name: e.target.value })}
             />
           </FormField>
-          <FormField label="Date of birth" htmlFor="pd-dob">
-            <Input
-              id="pd-dob"
-              type="date"
-              value={draft.date_of_birth}
-              onChange={(e) => setDraft({ ...draft, date_of_birth: e.target.value })}
-            />
-          </FormField>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Date of birth" htmlFor="pd-dob">
+              <Input
+                id="pd-dob"
+                type="date"
+                value={draft.date_of_birth}
+                onChange={(e) => setDraft({ ...draft, date_of_birth: e.target.value })}
+              />
+            </FormField>
+            <FormField label="NHS number" htmlFor="pd-nhs">
+              <Input
+                id="pd-nhs"
+                placeholder="e.g. 462 423 5614"
+                value={draft.nhs_number}
+                onChange={(e) => setDraft({ ...draft, nhs_number: e.target.value })}
+              />
+            </FormField>
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Gender" htmlFor="pd-gender">
               <Input id="pd-gender" value={draft.gender} onChange={(e) => setDraft({ ...draft, gender: e.target.value })} />
@@ -315,6 +328,7 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
       <dl>
         <InfoRow label="Preferred name" value={serviceUser.preferred_name} />
         <InfoRow label="Date of birth" value={serviceUser.date_of_birth} />
+        <InfoRow label="NHS number" value={serviceUser.nhs_number} />
         <InfoRow label="Gender" value={serviceUser.gender} />
         <InfoRow label="Language" value={serviceUser.language} />
         <InfoRow label="Phone" value={serviceUser.phone} />

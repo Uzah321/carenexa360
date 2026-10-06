@@ -4,9 +4,11 @@ import type {
   CarePlan,
   CarePlanArea,
   CarePlanRiskLevel,
+  HomeCarePlan,
   MedicationRiskDetails,
   PersonAtRisk,
   RiskAssessmentType,
+  RiskType,
 } from "../../lib/types";
 
 export function useCarePlans(serviceUserId: number) {
@@ -51,7 +53,10 @@ export interface CarePlanSectionInput {
 export interface CarePlanRiskAssessmentInput {
   type: RiskAssessmentType;
   area: CarePlanArea | "";
+  risk_type: RiskType | "";
   hazard: string;
+  details: string;
+  triggers: string;
   persons_at_risk: PersonAtRisk[];
   harm_description: string;
   likelihood: number | null;
@@ -60,13 +65,27 @@ export interface CarePlanRiskAssessmentInput {
   further_actions: string;
   residual_likelihood: number | null;
   residual_severity: number | null;
+  target_likelihood: number | null;
+  target_severity: number | null;
+  contingency_plan_required: boolean;
+  contingency_plan: string;
   action_owner_id: number | null;
   action_due_date: string;
   review_date: string;
   medication_details: MedicationRiskDetails | null;
 }
 
-type BlankableRiskField = "area" | "harm_description" | "existing_controls" | "further_actions" | "action_due_date" | "review_date";
+type BlankableRiskField =
+  | "area"
+  | "risk_type"
+  | "details"
+  | "triggers"
+  | "harm_description"
+  | "existing_controls"
+  | "further_actions"
+  | "contingency_plan"
+  | "action_due_date"
+  | "review_date";
 
 // What's actually sent — form blanks ("") become nulls, see normalizeRiskAssessmentInput.
 export type CarePlanRiskAssessmentPayload = Omit<CarePlanRiskAssessmentInput, BlankableRiskField> & {
@@ -76,6 +95,7 @@ export type CarePlanRiskAssessmentPayload = Omit<CarePlanRiskAssessmentInput, Bl
 export interface CreateCarePlanInput {
   effective_from: string;
   notes?: string;
+  home_care_plan?: HomeCarePlan | null;
   sections: CarePlanSectionInput[];
   risk_assessments?: CarePlanRiskAssessmentPayload[];
 }

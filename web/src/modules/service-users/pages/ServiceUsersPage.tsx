@@ -43,6 +43,7 @@ const EMPTY_FORM: ServiceUserInput = {
   last_name: "",
   preferred_name: "",
   date_of_birth: "",
+  nhs_number: "",
   referring_hospital: "",
   hospital_record_number: "",
   discharge_date: "",
@@ -55,6 +56,7 @@ function serviceUserToForm(serviceUser: ServiceUser): ServiceUserInput {
     last_name: serviceUser.last_name,
     preferred_name: serviceUser.preferred_name ?? "",
     date_of_birth: serviceUser.date_of_birth ?? "",
+    nhs_number: serviceUser.nhs_number ?? "",
     gender: serviceUser.gender ?? "",
     phone: serviceUser.phone ?? "",
     address: serviceUser.address ?? "",
@@ -313,6 +315,14 @@ export function ServiceUsersPage() {
               type="date"
               value={form.date_of_birth ?? ""}
               onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })}
+            />
+          </FormField>
+          <FormField label="NHS number" htmlFor="nhs_number">
+            <Input
+              id="nhs_number"
+              placeholder="e.g. 462 423 5614"
+              value={form.nhs_number ?? ""}
+              onChange={(e) => setForm({ ...form, nhs_number: e.target.value })}
             />
           </FormField>
 

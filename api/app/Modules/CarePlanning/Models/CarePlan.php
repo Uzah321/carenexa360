@@ -23,12 +23,14 @@ class CarePlan extends Model
         'effective_from',
         'created_by',
         'notes',
+        'home_care_plan',
     ];
 
     protected function casts(): array
     {
         return [
             'effective_from' => 'date',
+            'home_care_plan' => 'array',
         ];
     }
 

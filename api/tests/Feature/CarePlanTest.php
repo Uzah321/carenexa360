@@ -236,4 +236,105 @@ class CarePlanTest extends TestCase
         $activeCount = $serviceUser->carePlans()->where('status', 'active')->count();
         $this->assertSame(1, $activeCount);
     }
+
+    public function test_home_care_plan_is_saved_sanitised_and_carried_per_version(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
+
+        $response = $this->actingAs($user)->postJson("/api/v1/service-users/{$serviceUser->id}/care-plans", [
+            'effective_from' => '2026-01-01',
+            'sections' => [$this->createSection()],
+            'home_care_plan' => [
+                'about_me' => '<p>Retired <b>teacher</b><script>alert(1)</script></p>',
+                'desired_outcomes' => '  To stay living at home  ',
+                'cognitive_impairment_summary' => '',
+                'needs' => [
+                    'personal_care' => ['details' => '<ul><li>Help to shower</li></ul>', 'consented' => true],
+                    'continence' => ['details' => null, 'consented' => false],
+                    'mobility' => ['details' => '', 'consented' => null],
+                ],
+                'summaries' => ['dietary_needs' => 'Diabetic diet', 'mobility' => ''],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.home_care_plan.about_me', '<p>Retired <b>teacher</b></p>')
+            ->assertJsonPath('data.home_care_plan.desired_outcomes', 'To stay living at home')
+            ->assertJsonPath('data.home_care_plan.needs.personal_care', ['details' => '<ul><li>Help to shower</li></ul>', 'consented' => true])
+            ->assertJsonPath('data.home_care_plan.needs.continence', ['details' => null, 'consented' => false])
+            ->assertJsonPath('data.home_care_plan.summaries', ['dietary_needs' => 'Diabetic diet'])
+            ->assertJsonMissingPath('data.home_care_plan.needs.mobility')
+            ->assertJsonMissingPath('data.home_care_plan.cognitive_impairment_summary');
+
+        // A version saved without it has none — the old version keeps its own.
+        $this->actingAs($user)->postJson("/api/v1/service-users/{$serviceUser->id}/care-plans", [
+            'effective_from' => '2026-06-01',
+            'sections' => [$this->createSection()],
+        ])->assertCreated()->assertJsonPath('data.home_care_plan', null);
+
+        $this->actingAs($user)->getJson("/api/v1/care-plans/{$response->json('data.id')}")
+            ->assertJsonPath('data.home_care_plan.summaries.dietary_needs', 'Diabetic diet');
+    }
+
+    public function test_home_care_plan_rejects_unknown_areas_and_fields(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
+
+        $this->actingAs($user)->postJson("/api/v1/service-users/{$serviceUser->id}/care-plans", [
+            'effective_from' => '2026-01-01',
+            'sections' => [$this->createSection()],
+            'home_care_plan' => [
+                'favourite_colour' => 'blue',
+                'needs' => ['gardening' => ['details' => 'x']],
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['home_care_plan', 'home_care_plan.needs']);
+    }
+
+    public function test_risk_assessment_type_details_triggers_target_and_contingency_plan(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
+
+        $base = [
+            'type' => 'general',
+            'risk_type' => 'falls',
+            'hazard' => 'Falls on the stairs',
+            'details' => '<p>Has fallen <b>twice</b> this year<img src=x onerror=alert(1)></p>',
+            'triggers' => 'Rushing to answer the door',
+            'likelihood' => 4,
+            'severity' => 4,
+            'target_likelihood' => 2,
+            'target_severity' => 3,
+        ];
+
+        $response = $this->actingAs($user)->postJson("/api/v1/service-users/{$serviceUser->id}/care-plans", [
+            'effective_from' => '2026-01-01',
+            'sections' => [$this->createSection()],
+            'risk_assessments' => [
+                [...$base, 'contingency_plan_required' => true, 'contingency_plan' => '<p>Call 999</p>'],
+                [...$base, 'contingency_plan_required' => false, 'contingency_plan' => '<p>Stale plan</p>'],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.risk_assessments.0.risk_type', 'falls')
+            ->assertJsonPath('data.risk_assessments.0.details', '<p>Has fallen <b>twice</b> this year</p>')
+            ->assertJsonPath('data.risk_assessments.0.triggers', 'Rushing to answer the door')
+            ->assertJsonPath('data.risk_assessments.0.target_risk_score', 6)
+            ->assertJsonPath('data.risk_assessments.0.contingency_plan_required', true)
+            ->assertJsonPath('data.risk_assessments.0.contingency_plan', '<p>Call 999</p>')
+            ->assertJsonPath('data.risk_assessments.1.contingency_plan_required', false)
+            ->assertJsonPath('data.risk_assessments.1.contingency_plan', null);
+
+        $this->actingAs($user)->postJson("/api/v1/service-users/{$serviceUser->id}/care-plans", [
+            'effective_from' => '2026-01-01',
+            'sections' => [$this->createSection()],
+            'risk_assessments' => [[...$base, 'risk_type' => 'dragons']],
+        ])->assertUnprocessable()->assertJsonValidationErrors('risk_assessments.0.risk_type');
+    }
 }

@@ -1,10 +1,13 @@
-import type { CarePlan, CarePlanRiskAssessment, CarePlanSection, ServiceUser } from "../../lib/types";
+import type { CarePlan, CarePlanRiskAssessment, CarePlanSection, HomeCarePlan, ServiceUser } from "../../lib/types";
 import { todayIso } from "../../lib/dates";
+import { richTextToHtml } from "../../lib/richText";
+import { END_OF_LIFE_AREAS, NEED_AREAS, SUMMARIES, consentLabel, homeCarePlanHasContent, type NeedAreaConfig } from "./homeCarePlan";
 import {
   LIKELIHOOD_LABELS,
   MEDICATION_SUPPORT_LABELS,
   PERSON_AT_RISK_LABELS,
   RISK_RATING_LABELS,
+  RISK_TYPE_LABELS,
   SEVERITY_LABELS,
   riskRating,
   riskScore,
@@ -42,6 +45,39 @@ function scoreCell(likelihood: number | null, severity: number | null): string {
 
 function row(label: string, value: string): string {
   return `<tr><th>${esc(label)}</th><td>${value}</td></tr>`;
+}
+
+/** Saved rich text, re-sanitised — or "—" when empty. */
+function rich(value: string | null | undefined): string {
+  return richTextToHtml(value) || "—";
+}
+
+function homeCarePlanHtml(plan: HomeCarePlan | null): string {
+  if (!plan || !homeCarePlanHasContent(plan)) return "<p>No home care plan recorded on this version.</p>";
+
+  const needRows = (areas: NeedAreaConfig[]) =>
+    areas
+      .map((config) => {
+        const need = plan.needs?.[config.key];
+        if (!need) return "";
+        const consent = config.consentLabel ? `<br><small>${esc(consentLabel(need.consented))}</small>` : "";
+        return row(config.title, rich(need.details) + consent);
+      })
+      .join("");
+
+  const summaryRows = SUMMARIES.filter((s) => plan.summaries?.[s.key])
+    .map((s) => row(s.label, esc(plan.summaries?.[s.key])))
+    .join("");
+
+  return `
+    <table class="kv">
+      ${row("About me", rich(plan.about_me))}
+      ${row("Desired goals and outcomes", [plan.desired_outcomes ? `<b>${esc(plan.desired_outcomes)}</b>` : "", richTextToHtml(plan.goals_and_outcomes)].filter(Boolean).join("<br>") || "—")}
+      ${row("Cognitive impairment", [plan.cognitive_impairment_summary ? `<b>${esc(plan.cognitive_impairment_summary)}</b>` : "", richTextToHtml(plan.cognitive_impairment)].filter(Boolean).join("<br>") || "—")}
+      ${needRows(NEED_AREAS)}
+    </table>
+    ${summaryRows ? `<h3>Summaries</h3><table class="kv">${summaryRows}</table>` : ""}
+    ${END_OF_LIFE_AREAS.some((a) => plan.needs?.[a.key]) ? `<h3>Advance care and final days</h3><table class="kv">${needRows(END_OF_LIFE_AREAS)}</table>` : ""}`;
 }
 
 function sectionHtml(section: CarePlanSection): string {
@@ -94,14 +130,20 @@ function riskAssessmentHtml(ra: CarePlanRiskAssessment, index: number): string {
     <div class="block">
       <h3>${index + 1}. ${esc(ra.hazard)}</h3>
       <table class="kv">
+        ${med ? "" : row("Risk type", esc(ra.risk_type ? RISK_TYPE_LABELS[ra.risk_type] : "—"))}
         ${med ? "" : row("Care plan area", esc(areaLabel(ra.area)))}
         ${medicationRows}
+        ${ra.details ? row("Risk details", rich(ra.details)) : ""}
+        ${ra.triggers ? row("Risk triggers", multiline(ra.triggers)) : ""}
         ${row("Who might be harmed", esc(ra.persons_at_risk.map((p) => PERSON_AT_RISK_LABELS[p]).join(", ") || "—"))}
         ${row("How they might be harmed", multiline(ra.harm_description))}
         ${row("Initial risk", scoreCell(ra.likelihood, ra.severity))}
         ${row("Existing control measures", multiline(ra.existing_controls))}
         ${row("Further action required", multiline(ra.further_actions))}
         ${row("Residual risk", scoreCell(ra.residual_likelihood, ra.residual_severity))}
+        ${ra.target_likelihood || ra.target_severity ? row("Target risk", scoreCell(ra.target_likelihood, ra.target_severity)) : ""}
+        ${row("Safety / contingency plan required", ra.contingency_plan_required ? "Yes" : "No")}
+        ${ra.contingency_plan_required ? row("Safety / contingency plan", rich(ra.contingency_plan)) : ""}
         ${row("Action by", esc(ra.action_owner_name ?? "—"))}
         ${row("Action due", esc(ra.action_due_date ?? "—"))}
         ${row("Review date", esc(ra.review_date ?? "—"))}
@@ -135,7 +177,9 @@ const STYLES = `
   th, td { border: 1px solid #c8c8c8; padding: 4pt 6pt; vertical-align: top; text-align: left; }
   table.kv th { width: 32%; background: #f3f4f6; font-weight: bold; }
   table.grid thead th { background: #f3f4f6; }
-  ul { margin: 0; padding-left: 14pt; }
+  ul, ol { margin: 0; padding-left: 14pt; }
+  p { margin: 0 0 3pt; }
+  mark { background: #fde68a; }
   small { color: #555; }
   .meta { color: #555; margin-bottom: 8pt; }
   .block { page-break-inside: avoid; break-inside: avoid; }
@@ -157,6 +201,7 @@ export function buildCarePlanHtml(plan: CarePlan, serviceUser: ServiceUser | und
     ? [
         row("Name", esc(name + (serviceUser.preferred_name ? ` (prefers "${serviceUser.preferred_name}")` : ""))),
         row("Date of birth", esc(serviceUser.date_of_birth ?? "—")),
+        row("NHS number", esc(serviceUser.nhs_number ?? "—")),
         row("Address", multiline(serviceUser.address)),
         row("Allergies", esc(serviceUser.allergies?.join(", ") || "None recorded")),
         row("Diagnoses", esc(serviceUser.diagnoses?.join(", ") || "—")),
@@ -183,6 +228,9 @@ export function buildCarePlanHtml(plan: CarePlan, serviceUser: ServiceUser | und
   <h2>About the person</h2>
   <table class="kv">${profileRows}</table>
   ${plan.notes ? `<h3>Plan notes</h3><p>${multiline(plan.notes)}</p>` : ""}
+
+  <h2>Home care plan</h2>
+  ${homeCarePlanHtml(plan.home_care_plan)}
 
   <h2>Care and support needs</h2>
   ${plan.sections.map(sectionHtml).join("") || "<p>No sections recorded.</p>"}

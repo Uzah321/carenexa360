@@ -38,6 +38,7 @@ class UpdateServiceUserRequest extends FormRequest
             'last_name' => ['sometimes', 'required', 'string', 'max:255'],
             'preferred_name' => ['nullable', 'string', 'max:255'],
             'date_of_birth' => ['nullable', 'date'],
+            'nhs_number' => ['nullable', 'string', 'max:20'],
             'gender' => ['nullable', 'string', 'max:50'],
             'language' => ['nullable', 'string', 'max:50'],
             'phone' => ['nullable', 'string', 'max:50'],
