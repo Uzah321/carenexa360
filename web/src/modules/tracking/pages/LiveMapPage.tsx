@@ -6,6 +6,8 @@ import { useAuth } from "../../../lib/auth-context";
 import { useBranches } from "../../organization/api";
 import { useLiveMap, type LiveMapCarer } from "../api";
 import { OpenShiftsCard } from "../components/OpenShiftsCard";
+import { formatTime } from "../../../lib/preferences";
+import { branchOptionLabel } from "../../organization/branchLabel";
 
 const CARER_COLORS = ["#00b4a3", "#398fde", "#f66d62", "#eea83a", "#a162de", "#80bc4e"];
 
@@ -51,8 +53,8 @@ function carerIcon(color: string, label: string, focused: boolean): google.maps.
   return icon;
 }
 
-function formatTime(iso?: string) {
-  return iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+function timeOf(iso?: string) {
+  return iso ? formatTime(iso) : "";
 }
 
 /**
@@ -169,7 +171,7 @@ export function LiveMapPage() {
             <option value="">All Branches</option>
             {(branches?.data ?? []).map((branch) => (
               <option key={branch.id} value={branch.id}>
-                {branch.name}
+                {branchOptionLabel(branch)}
               </option>
             ))}
           </Select>
@@ -191,7 +193,7 @@ export function LiveMapPage() {
                 }`}
               >
                 <span className="font-medium text-ink">{person.name}</span>
-                <span className="text-inksoft">{formatTime(person.checked_in_at)}</span>
+                <span className="text-inksoft">{timeOf(person.checked_in_at)}</span>
               </li>
             ))}
             {(data?.checked_in.items ?? []).length === 0 && (
@@ -209,7 +211,7 @@ export function LiveMapPage() {
             {(data?.checked_out.items ?? []).map((person) => (
               <li key={person.user_id} className="flex items-center justify-between text-xs">
                 <span className="font-medium text-ink">{person.name}</span>
-                <span className="text-inksoft">{formatTime(person.checked_out_at)}</span>
+                <span className="text-inksoft">{timeOf(person.checked_out_at)}</span>
               </li>
             ))}
             {(data?.checked_out.items ?? []).length === 0 && (
@@ -265,7 +267,7 @@ export function LiveMapPage() {
                             <strong>{carer.name}</strong>
                             <br />
                             {position.isLive
-                              ? `Last seen ${formatTime(carer.last_ping_at ?? undefined)}`
+                              ? `Last seen ${timeOf(carer.last_ping_at ?? undefined)}`
                               : "Checked in — waiting for a location signal"}
                           </div>
                         </InfoWindow>

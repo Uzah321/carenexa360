@@ -221,7 +221,7 @@ function DepartmentsTab({ tenantId }: { tenantId: number }) {
               <option value="" disabled>
                 Select a branch
               </option>
-              {(branches?.data ?? []).map((branch) => (
+              {(branches?.data ?? []).filter((branch) => branch.status === "active").map((branch) => (
                 <option key={branch.id} value={branch.id}>
                   {branch.name}
                 </option>

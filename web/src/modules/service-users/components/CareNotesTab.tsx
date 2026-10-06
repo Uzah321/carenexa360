@@ -5,6 +5,7 @@ import { apiErrorMessage } from "../../../lib/api-error";
 import { useAuth } from "../../../lib/auth-context";
 import { CARE_NOTE_MODERATOR_ROLES, type CareNote } from "../../../lib/types";
 import { careNoteAudioUrl, useDeleteCareNote, useRecordCareNote, useServiceUserCareNotes } from "../../care-notes/api";
+import { formatDateTime } from "../../../lib/preferences";
 
 const PREFERRED_MIME_TYPES = ["audio/webm", "audio/mp4", "audio/ogg"];
 
@@ -215,7 +216,7 @@ export function CareNotesTab({ serviceUserId }: { serviceUserId: number }) {
                       <div>
                         <p className="text-sm font-medium text-ink">{note.author_name ?? "Unknown"}</p>
                         <p className="text-xs text-inksoft">
-                          {new Date(note.created_at).toLocaleString()}
+                          {formatDateTime(note.created_at)}
                           {note.duration_seconds != null && ` · ${formatDuration(note.duration_seconds)}`}
                         </p>
                       </div>

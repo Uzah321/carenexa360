@@ -1,3 +1,5 @@
+import { tenantToday } from "./preferences";
+
 /**
  * Calendar-date helpers that work in the viewer's own timezone.
  *
@@ -23,9 +25,12 @@ export function toIsoDate(date: Date): string {
   return date.toLocaleDateString("en-CA");
 }
 
-/** Today's calendar date, locally — what the user would call "today". */
+/**
+ * Today's calendar date for the organisation — its timezone from System
+ * Settings, so a manager viewing from abroad still sees their carers' day.
+ */
 export function todayIso(): string {
-  return toIsoDate(new Date());
+  return tenantToday();
 }
 
 /** Shift a YYYY-MM-DD string by whole days, staying on local calendar dates. */
@@ -35,8 +40,16 @@ export function addDays(iso: string, days: number): string {
   return toIsoDate(date);
 }
 
-/** The first day of the current month, locally. */
+/** The first day of the current month, for the organisation. */
 export function startOfMonthIso(): string {
-  const now = new Date();
-  return toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  return `${tenantToday().slice(0, 8)}01`;
+}
+
+/** Shift a YYYY-MM-DD string by whole months, clamping to the month's last day (31 Jan + 1 month = 28/29 Feb). */
+export function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const target = new Date(y, m - 1 + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return toIsoDate(target);
 }

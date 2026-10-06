@@ -32,6 +32,7 @@ import { DEFAULT_UNITS, draftToValue, valueToDraft, type ObservationDraft } from
 import { assessNews2 } from "../../observations/news2";
 import { rangeScores } from "../../observations/rangeScores";
 import { OBSERVATION_TYPES, type Observation, type ObservationType } from "../../../lib/types";
+import { formatDateTime } from "../../../lib/preferences";
 
 function labelFor(type: ObservationType): string {
   return type === "news2" ? "NEWS2 full set" : type.replaceAll("_", " ");
@@ -165,7 +166,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
     {
       key: "recorded_at",
       header: "Recorded",
-      render: (row) => new Date(row.recorded_at).toLocaleString(),
+      render: (row) => formatDateTime(row.recorded_at),
     },
     { key: "type", header: "Type", render: (row) => labelFor(row.type) },
     {
@@ -379,7 +380,7 @@ export function ObservationsTab({ serviceUserId }: { serviceUserId: number }) {
             <dl className="mb-4">
               <div className="flex justify-between border-b border-line py-2 text-sm">
                 <dt className="text-inksoft">Recorded at</dt>
-                <dd className="font-medium text-ink">{new Date(viewingObservation.recorded_at).toLocaleString()}</dd>
+                <dd className="font-medium text-ink">{formatDateTime(viewingObservation.recorded_at)}</dd>
               </div>
               <div className="flex justify-between gap-4 border-b border-line py-2 text-sm">
                 <dt className="text-inksoft">Reading</dt>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Observation, ObservationType } from "../../../lib/types";
+import { formatDateTime } from "../../../lib/preferences";
 
 // Chart tokens, following the dataviz skill's palette structure substituted
 // with this app's teal/paper brand (see design-system/index.ts for the same
@@ -195,7 +196,7 @@ export function ObservationTrendChart({
             left: `${Math.min(85, Math.max(5, (scaleX(hovered.x) / WIDTH) * 100))}%`,
           }}
         >
-          <div className="font-medium text-ink">{new Date(hovered.recordedAt).toLocaleString()}</div>
+          <div className="font-medium text-ink">{formatDateTime(hovered.recordedAt)}</div>
           {isBloodPressure ? (
             <div>
               {hovered.primary}/{hovered.secondary} mmHg

@@ -6,6 +6,8 @@ import type {
   RiskAssessmentType,
   RiskType,
 } from "../../lib/types";
+import { addMonths, todayIso } from "../../lib/dates";
+import { tenantSettings } from "../../lib/preferences";
 
 // 5×5 likelihood × severity matrix — the scale most UK care providers use
 // for CQC-facing risk assessments.
@@ -129,7 +131,8 @@ export function emptyRiskAssessmentInput(type: RiskAssessmentType): CarePlanRisk
     contingency_plan: "",
     action_owner_id: null,
     action_due_date: "",
-    review_date: "",
+    // Due on the care pathway's risk review schedule (System Settings → Care Pathway).
+    review_date: addMonths(todayIso(), tenantSettings().care_pathway.risk_review_interval_months),
     medication_details: type === "medication" ? { controlled_drug: false, prn: false } : null,
   };
 }

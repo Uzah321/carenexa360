@@ -22,13 +22,36 @@ class TenantClock
     {
         $timezone = $tenantId ? Tenant::find($tenantId)?->timezone : null;
 
-        return $timezone ?: (string) config('app.timezone');
+        return $timezone && in_array($timezone, timezone_identifiers_list(), true) ? $timezone : (string) config('app.timezone');
     }
 
     /** The calendar date it currently is for this tenant, as YYYY-MM-DD. */
     public static function today(?int $tenantId): string
     {
         return Carbon::now(self::timezoneFor($tenantId))->toDateString();
+    }
+
+    /**
+     * A tenant-local wall-clock time ("2026-06-10" + "09:00", as visits,
+     * shifts and dose times are stored) as the real instant it refers to.
+     * Comparing it with a UTC timestamp (a check-in, a dose given) is then
+     * correct whatever the tenant's offset.
+     */
+    public static function wallClock(?int $tenantId, string $date, string $time): Carbon
+    {
+        return Carbon::parse("{$date} {$time}", self::timezoneFor($tenantId));
+    }
+
+    /** A stored UTC timestamp as the tenant's local time, for display or time-of-day comparisons. */
+    public static function local(?int $tenantId, \DateTimeInterface $instant): Carbon
+    {
+        return Carbon::instance($instant)->setTimezone(self::timezoneFor($tenantId));
+    }
+
+    /** The current moment in the tenant's timezone. */
+    public static function now(?int $tenantId): Carbon
+    {
+        return Carbon::now(self::timezoneFor($tenantId));
     }
 
     /**

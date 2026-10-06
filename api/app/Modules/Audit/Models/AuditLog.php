@@ -2,8 +2,8 @@
 
 namespace App\Modules\Audit\Models;
 
-use App\Modules\Organization\Models\Tenant;
 use App\Models\User;
+use App\Modules\Organization\Models\Tenant;
 use App\Support\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +25,7 @@ class AuditLog extends Model
         'ip_address',
         'user_agent',
         'device',
+        'created_at',
     ];
 
     protected function casts(): array

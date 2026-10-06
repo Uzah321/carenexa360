@@ -13,6 +13,7 @@ import {
   RowActionsMenu,
   Select,
   StatusBadge,
+  Suggestions,
   Tabs,
   Textarea,
   type TabItem,
@@ -42,7 +43,8 @@ import {
   type ServiceUser,
   type StaffMember,
 } from "../../../lib/types";
-import { todayIso } from "../../../lib/dates";
+import { addDays, addMonths, todayIso } from "../../../lib/dates";
+import { tenantSettings } from "../../../lib/preferences";
 
 const EMPTY_SECTION: CarePlanSectionInput = {
   area: "personal_care",
@@ -63,6 +65,21 @@ const RISK_TONE: Record<CarePlanRiskLevel, "danger" | "warning" | "success"> = {
   medium: "warning",
   low: "success",
 };
+
+/**
+ * A blank section, due for review on the care pathway's schedule (System
+ * Settings → Care Pathway): a client's first plan by the first-review
+ * deadline, later versions after the regular review interval.
+ */
+function newSection(isFirstPlan: boolean): CarePlanSectionInput {
+  const pathway = tenantSettings().care_pathway;
+  return {
+    ...EMPTY_SECTION,
+    review_date: isFirstPlan
+      ? addDays(todayIso(), pathway.first_review_within_weeks * 7)
+      : addMonths(todayIso(), pathway.review_interval_months),
+  };
+}
 
 function RiskBadge({ risk }: { risk: string | null }) {
   if (!risk || !(CARE_PLAN_RISK_LEVELS as readonly string[]).includes(risk)) {
@@ -161,7 +178,13 @@ function SectionFormFields({
         />
       </FormField>
       <FormField label="Equipment" htmlFor={`${idPrefix}-equipment`}>
-        <Input id={`${idPrefix}-equipment`} value={value.equipment ?? ""} onChange={(e) => onChange({ equipment: e.target.value })} />
+        <Input
+          id={`${idPrefix}-equipment`}
+          list={`${idPrefix}-equipment-options`}
+          value={value.equipment ?? ""}
+          onChange={(e) => onChange({ equipment: e.target.value })}
+        />
+        <Suggestions id={`${idPrefix}-equipment-options`} items={tenantSettings().reference_data.equipment} />
       </FormField>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="Frequency" htmlFor={`${idPrefix}-frequency`}>
@@ -497,7 +520,7 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
     .sort()[0];
 
   function openNewVersionDrawer() {
-    setSections(activePlan && activePlan.sections.length > 0 ? activePlan.sections.map(toCarePlanSectionInput) : [{ ...EMPTY_SECTION }]);
+    setSections(activePlan && activePlan.sections.length > 0 ? activePlan.sections.map(toCarePlanSectionInput) : [newSection(!activePlan)]);
     setEffectiveFrom(todayIso());
     setNotes(activePlan?.notes ?? "");
     setIsOpen(true);
@@ -842,7 +865,7 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
             type="button"
             variant="secondary"
             className="mb-6"
-            onClick={() => setSections((prev) => [...prev, { ...EMPTY_SECTION }])}
+            onClick={() => setSections((prev) => [...prev, newSection(!activePlan)])}
           >
             Add another section
           </Button>

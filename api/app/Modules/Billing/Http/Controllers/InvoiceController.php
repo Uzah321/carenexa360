@@ -12,6 +12,7 @@ use App\Modules\Organization\Models\Tenant;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Modules\Visits\Models\Visit;
 use App\Support\Scheduling\WorkedHours;
+use App\Support\Time\TenantClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -53,7 +54,7 @@ class InvoiceController extends Controller
                 'funder_id' => $request->validated('funder_id'),
                 'period_start' => $request->validated('period_start'),
                 'period_end' => $request->validated('period_end'),
-                'issue_date' => now()->toDateString(),
+                'issue_date' => TenantClock::today($serviceUser->tenant_id),
                 'due_date' => $request->validated('due_date'),
                 'status' => 'draft',
                 'currency' => Tenant::find($serviceUser->tenant_id)?->currency ?? 'GBP',

@@ -13,6 +13,8 @@ import { AssignTaskModal } from "../components/AssignTaskModal";
 import { EditVisitModal } from "../components/EditVisitModal";
 import { useRescheduleVisit, useVisits } from "../api";
 import { addDays, todayIso } from "../../../lib/dates";
+import { tenantMinutesNow } from "../../../lib/preferences";
+import { branchOptionLabel } from "../../organization/branchLabel";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES_PER_DAY = 24 * 60;
@@ -229,7 +231,7 @@ export function SchedulePage() {
     [carers, visitsByCarer],
   );
   const isToday = date === todayIso();
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowMinutes = tenantMinutesNow();
 
   const timelineWidth = MINUTES_PER_DAY * PX_PER_MINUTE;
 
@@ -563,7 +565,7 @@ export function SchedulePage() {
               <option value="">All Branches</option>
               {(branches?.data ?? []).map((branch) => (
                 <option key={branch.id} value={branch.id}>
-                  {branch.name}
+                  {branchOptionLabel(branch)}
                 </option>
               ))}
             </Select>

@@ -28,6 +28,7 @@ import {
   type IncidentStatus,
   type IncidentType,
 } from "../../../lib/types";
+import { formatDateTime } from "../../../lib/preferences";
 
 const SEVERITY_TONE: Record<IncidentSeverity, "neutral" | "warning" | "danger"> = {
   low: "neutral",
@@ -208,7 +209,7 @@ export function IncidentsTab({ serviceUserId }: { serviceUserId: number }) {
     {
       key: "created_at",
       header: "Reported",
-      render: (row) => new Date(row.created_at).toLocaleString(),
+      render: (row) => formatDateTime(row.created_at),
     },
     { key: "type", header: "Type", render: (row) => row.type.replaceAll("_", " ") },
     {
@@ -381,7 +382,7 @@ export function IncidentsTab({ serviceUserId }: { serviceUserId: number }) {
             <div className="flex justify-between py-2 text-sm">
               <dt className="text-inksoft">Closed at</dt>
               <dd className="font-medium text-ink">
-                {viewingIncident.closed_at ? new Date(viewingIncident.closed_at).toLocaleString() : "—"}
+                {viewingIncident.closed_at ? formatDateTime(viewingIncident.closed_at) : "—"}
               </dd>
             </div>
           </dl>

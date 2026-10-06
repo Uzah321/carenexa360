@@ -3,6 +3,7 @@
 namespace App\Modules\Organization\Models;
 
 use App\Models\User;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Support\Concerns\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -42,7 +43,8 @@ class Tenant extends Model
      */
     public function setting(string $key, mixed $default = null): mixed
     {
-        return data_get($this->settings, $key, $default);
+        // Anything never saved falls back to the organisation-wide default.
+        return data_get(TenantSettings::effective($this->settings), $key) ?? $default;
     }
 
     public function branches(): HasMany

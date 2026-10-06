@@ -50,6 +50,10 @@ trait HasAuditLog
             'ip_address' => Request::ip(),
             'user_agent' => Request::userAgent(),
             'device' => null,
+            // Stamped by the app (UTC) rather than left to the column default,
+            // which follows the database server's own timezone — a server not
+            // on UTC would otherwise put entries hours out.
+            'created_at' => now(),
         ]);
     }
 }

@@ -26,6 +26,7 @@ import {
   type IncidentStatus,
   type IncidentType,
 } from "../../../lib/types";
+import { formatDate } from "../../../lib/preferences";
 
 const SEVERITY_TONE: Record<IncidentSeverity, "neutral" | "warning" | "danger"> = {
   low: "neutral",
@@ -117,7 +118,7 @@ export function IncidentsPage() {
     {
       key: "created_at",
       header: "Reported",
-      render: (row) => new Date(row.created_at).toLocaleDateString(),
+      render: (row) => formatDate(row.created_at),
     },
     {
       key: "service_user",

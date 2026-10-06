@@ -16,6 +16,7 @@ import {
   RowActionsMenu,
   Select,
   StatusBadge,
+  Suggestions,
   Textarea,
   type Column,
   type RowAction,
@@ -48,6 +49,8 @@ import {
 } from "../../medications/administration";
 import { MedicationRound } from "../../medications/components/MedicationRound";
 import { ScheduleTimesInput } from "../../medications/components/ScheduleTimesInput";
+import { formatDateTime } from "../../../lib/preferences";
+import { tenantSettings } from "../../../lib/preferences";
 
 const toNumberOrNull = (value: string) => (value.trim() === "" ? null : Number(value));
 
@@ -388,9 +391,30 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
               <Input
                 id="med-route"
                 required
+                list="med-route-options"
                 value={form.route}
                 onChange={(e) => setForm({ ...form, route: e.target.value })}
               />
+              <Suggestions id="med-route-options" items={tenantSettings().reference_data.medication_routes} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Strength" htmlFor="med-strength">
+              <Input
+                id="med-strength"
+                placeholder="e.g. 500mg"
+                value={form.strength ?? ""}
+                onChange={(e) => setForm({ ...form, strength: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Form" htmlFor="med-form">
+              <Input
+                id="med-form"
+                list="med-form-options"
+                value={form.form ?? ""}
+                onChange={(e) => setForm({ ...form, form: e.target.value })}
+              />
+              <Suggestions id="med-form-options" items={tenantSettings().reference_data.medication_forms} />
             </FormField>
           </div>
           <FormField label="Frequency" htmlFor="med-frequency">
@@ -762,7 +786,7 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
                       />
                       <span className="text-xs text-inksoft">
                         {administration.administered_at
-                          ? new Date(administration.administered_at).toLocaleString()
+                          ? formatDateTime(administration.administered_at)
                           : "—"}
                       </span>
                     </div>

@@ -22,6 +22,7 @@ export const REPORT_CATALOG: ReportCategory[] = [
       { label: "Client profile summary", key: "client_profile_summary" },
       { label: "Care history", key: "care_history" },
       { label: "Care-plan summary", key: "care_plan_summary" },
+      { label: "Care pathway progress", key: "care_pathway" },
       { label: "Review history", key: "review_history" },
       { label: "Visit history", key: "visit_history" },
       { label: "Missed visits", key: "missed_visits" },

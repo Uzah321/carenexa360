@@ -13,6 +13,7 @@ use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Modules\ServiceUsers\Support\FamilyPortalAccess;
 use App\Modules\Visits\Http\Resources\VisitResource;
 use App\Modules\Visits\Models\Visit;
+use App\Support\Time\TenantClock;
 use Illuminate\Http\Request;
 
 class FamilyPortalController extends Controller
@@ -38,8 +39,10 @@ class FamilyPortalController extends Controller
             ->with('sections')
             ->first();
 
+        $today = TenantClock::today($serviceUser->tenant_id);
+
         $upcomingVisits = Visit::where('service_user_id', $serviceUser->id)
-            ->where('visit_date', '>=', now()->toDateString())
+            ->where('visit_date', '>=', $today)
             ->with('carer')
             ->orderBy('visit_date')
             ->orderBy('start_time')
@@ -47,7 +50,7 @@ class FamilyPortalController extends Controller
             ->get();
 
         $recentVisits = Visit::where('service_user_id', $serviceUser->id)
-            ->where('visit_date', '<', now()->toDateString())
+            ->where('visit_date', '<', $today)
             ->with('carer')
             ->orderByDesc('visit_date')
             ->orderByDesc('start_time')

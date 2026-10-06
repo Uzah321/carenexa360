@@ -32,6 +32,7 @@ import {
   type SafeguardingCase,
   type SafeguardingCaseStatus,
 } from "../../../lib/types";
+import { formatDate } from "../../../lib/preferences";
 
 const STATUS_TONE: Record<SafeguardingCaseStatus, "info" | "warning" | "success" | "neutral"> = {
   reported: "info",
@@ -172,7 +173,7 @@ export function SafeguardingPage() {
   }
 
   const columns: Column<SafeguardingCase>[] = [
-    { key: "created_at", header: "Reported", render: (row) => new Date(row.created_at).toLocaleDateString() },
+    { key: "created_at", header: "Reported", render: (row) => formatDate(row.created_at) },
     { key: "concern_type", header: "Concern", render: (row) => row.concern_type },
     {
       key: "subject",

@@ -19,6 +19,7 @@ use App\Modules\Observations\Support\News2;
 use App\Modules\Observations\Support\RangeScores;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Tenant;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Modules\Payroll\Models\Payslip;
 use App\Modules\Reports\Support\OperationalReports;
 use App\Modules\Reports\Support\ReportRoles;
@@ -29,6 +30,7 @@ use App\Modules\Staff\Models\StaffProfile;
 use App\Modules\Training\Models\TrainingRecord;
 use App\Modules\Visits\Models\Visit;
 use App\Support\Geo\Haversine;
+use App\Support\Time\TenantClock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -62,8 +64,8 @@ class ReportGeneratorController extends Controller
         ]);
 
         $filters = [
-            'from' => $validated['from'] ?? now()->startOfMonth()->toDateString(),
-            'to' => $validated['to'] ?? now()->toDateString(),
+            'from' => $validated['from'] ?? TenantClock::now($request->user()->tenant_id)->startOfMonth()->toDateString(),
+            'to' => $validated['to'] ?? TenantClock::today($request->user()->tenant_id),
             'branch_id' => $validated['branch_id'] ?? null,
         ];
 
@@ -88,6 +90,7 @@ class ReportGeneratorController extends Controller
             // Client history, care delivery, workforce, rostering, travel and
             // finance reports live in OperationalReports.
             'care_history' => $ops->careHistory(),
+            'care_pathway' => $ops->carePathway(),
             'review_history' => $ops->reviewHistory(),
             'daily_notes' => $ops->dailyNotes(),
             'family_contact_activity' => $ops->familyContactActivity(),
@@ -220,6 +223,31 @@ class ReportGeneratorController extends Controller
         }
 
         return $query->whereHas($relation, fn ($q) => $q->where('branch_id', $branchId));
+    }
+
+    private function tenantId(): ?int
+    {
+        return auth()->user()?->tenant_id;
+    }
+
+    /**
+     * The report's from/to dates as UTC instants bounding the tenant's local
+     * days — for filtering timestamp columns, which are stored in UTC.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function utcRange(array $filters): array
+    {
+        return [
+            TenantClock::dayBoundsUtc($this->tenantId(), $filters['from'])[0],
+            TenantClock::dayBoundsUtc($this->tenantId(), $filters['to'])[1],
+        ];
+    }
+
+    /** A stored UTC timestamp as the tenant's local HH:MM. */
+    private function localTime(?\DateTimeInterface $instant): string
+    {
+        return $instant ? TenantClock::local($this->tenantId(), $instant)->format('H:i') : '—';
     }
 
     private function timeToMinutes(string $time): int
@@ -360,18 +388,18 @@ class ReportGeneratorController extends Controller
 
         $rows = $visits
             ->map(function (Visit $v) {
-                $scheduledStart = Carbon::parse($v->visit_date->toDateString().' '.$v->start_time);
+                $scheduledStart = TenantClock::wallClock($this->tenantId(), $v->visit_date->toDateString(), $v->start_time);
                 $minutesLate = (int) round(($v->check_in_at->timestamp - $scheduledStart->timestamp) / 60);
 
                 return [$v, $minutesLate];
             })
-            ->filter(fn ($pair) => $pair[1] > 10)
+            ->filter(fn ($pair) => $pair[1] > (int) TenantSettings::for($this->tenantId(), 'late_arrival_minutes'))
             ->map(fn ($pair) => [
                 'date' => $pair[0]->visit_date->toDateString(),
                 'client' => $this->clientName($pair[0]->serviceUser),
                 'carer' => $pair[0]->carer->name ?? 'Unassigned',
                 'scheduled' => $pair[0]->start_time,
-                'checked_in' => $pair[0]->check_in_at->format('H:i'),
+                'checked_in' => $this->localTime($pair[0]->check_in_at),
                 'minutes_late' => $pair[1],
             ])
             ->sortByDesc('minutes_late')
@@ -432,14 +460,11 @@ class ReportGeneratorController extends Controller
         'self_administered' => 'self_administered',
     ];
 
-    /** How far either side of its due time a dose can be given and still count as on time. */
-    private const MEDICATION_WINDOW_MINUTES = 60;
-
     private function medicationAdministrationsInRange(array $filters)
     {
         return MedicationAdministration::whereRaw(
             'COALESCE(administered_at, created_at) BETWEEN ? AND ?',
-            ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"]
+            $this->utcRange($filters)
         )
             ->when($filters['branch_id'], fn ($q) => $q->whereHas(
                 'medication.serviceUser',
@@ -561,8 +586,9 @@ class ReportGeneratorController extends Controller
      */
     private function unrecordedDoses(array $filters): array
     {
-        $from = Carbon::parse($filters['from'])->startOfDay();
-        $to = Carbon::parse($filters['to'])->endOfDay()->min(now());
+        $timezone = TenantClock::timezoneFor($this->tenantId());
+        $from = Carbon::parse($filters['from'], $timezone)->startOfDay();
+        $to = Carbon::parse($filters['to'], $timezone)->endOfDay()->min(now($timezone));
         $rows = collect();
 
         if ($from->lte($to)) {
@@ -572,7 +598,7 @@ class ReportGeneratorController extends Controller
                 ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
                 ->with([
                     'serviceUser',
-                    'administrations' => fn ($q) => $q->whereBetween('administered_at', [$from, $to]),
+                    'administrations' => fn ($q) => $q->whereBetween('administered_at', [$from->copy()->utc(), $to->copy()->utc()]),
                 ])
                 ->get();
 
@@ -583,14 +609,15 @@ class ReportGeneratorController extends Controller
                 }
 
                 $timed = $medication->administrations->whereNotNull('scheduled_time');
+                $localDate = fn (MedicationAdministration $a) => $a->administered_at->copy()->setTimezone($timezone)->toDateString();
                 $recorded = $timed
-                    ->map(fn (MedicationAdministration $a) => $a->administered_at->toDateString().' '.$a->scheduled_time)
+                    ->map(fn (MedicationAdministration $a) => $localDate($a).' '.$a->scheduled_time)
                     ->flip();
-                $untimedPerDay = $medication->administrations->whereNull('scheduled_time')
-                    ->countBy(fn (MedicationAdministration $a) => $a->administered_at->toDateString());
+                $untimedPerDay = $medication->administrations->whereNull('scheduled_time')->countBy($localDate);
 
-                $day = $from->copy()->max($medication->start_date ?? $from)->startOfDay();
-                $lastDay = $medication->end_date ? $to->copy()->min($medication->end_date->copy()->endOfDay()) : $to;
+                $start = $medication->start_date ? Carbon::parse($medication->start_date->toDateString(), $timezone) : $from;
+                $day = $from->copy()->max($start)->startOfDay();
+                $lastDay = $medication->end_date ? $to->copy()->min(Carbon::parse($medication->end_date->toDateString(), $timezone)->endOfDay()) : $to;
 
                 for (; $day->lte($lastDay); $day->addDay()) {
                     $untimed = $untimedPerDay[$day->toDateString()] ?? 0;
@@ -628,9 +655,10 @@ class ReportGeneratorController extends Controller
         ];
     }
 
-    /** Doses given more than MEDICATION_WINDOW_MINUTES either side of their due time. */
+    /** Doses given further from their due time than the tenant's medication window allows. */
     private function lateMedication(array $filters): array
     {
+        $window = (int) TenantSettings::for($this->tenantId(), 'medication_window_minutes');
         $rows = $this->medicationAdministrationsInRange($filters)
             ->whereIn('status', ['administered', 'prn'])
             ->whereNotNull('scheduled_time')
@@ -639,25 +667,25 @@ class ReportGeneratorController extends Controller
             ->orderBy('administered_at')
             ->get()
             ->map(function (MedicationAdministration $m) {
-                $given = $m->administered_at;
-                $diff = $this->timeToMinutes($given->format('H:i')) - $this->timeToMinutes($m->scheduled_time);
+                // Dose times are local wall-clock times; administered_at is UTC.
+                $diff = $this->timeToMinutes($this->localTime($m->administered_at)) - $this->timeToMinutes($m->scheduled_time);
 
                 return ['m' => $m, 'diff' => $diff];
             })
-            ->filter(fn ($r) => abs($r['diff']) > self::MEDICATION_WINDOW_MINUTES)
+            ->filter(fn ($r) => abs($r['diff']) > $window)
             ->map(fn ($r) => [
-                'date' => $r['m']->administered_at->toDateString(),
+                'date' => TenantClock::local($this->tenantId(), $r['m']->administered_at)->toDateString(),
                 'client' => $this->clientName($r['m']->medication?->serviceUser),
                 'medication' => $r['m']->medication?->name ?? '—',
                 'due' => $r['m']->scheduled_time,
-                'given' => $r['m']->administered_at->format('H:i'),
+                'given' => $this->localTime($r['m']->administered_at),
                 'timing' => ($r['diff'] > 0 ? 'Late by ' : 'Early by ').abs($r['diff']).' min',
                 'administered_by' => $r['m']->administeredBy->name ?? '—',
             ])
             ->values();
 
         return [
-            'title' => 'Late Medication (more than '.self::MEDICATION_WINDOW_MINUTES.' minutes from due time)',
+            'title' => "Late Medication (more than {$window} minutes from due time)",
             'columns' => [
                 ['key' => 'date', 'label' => 'Date'],
                 ['key' => 'client', 'label' => 'Client'],
@@ -728,7 +756,7 @@ class ReportGeneratorController extends Controller
     private function news2Scores(array $filters, bool $escalationsOnly): array
     {
         $observations = Observation::whereIn('type', self::NEWS2_TYPES)
-            ->whereBetween('recorded_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            ->whereBetween('recorded_at', $this->utcRange($filters))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with(['serviceUser', 'recordedBy'])
             ->orderByDesc('recorded_at')
@@ -765,11 +793,10 @@ class ReportGeneratorController extends Controller
         ];
     }
 
-
     private function observationTrend(array $filters, array $types, string $title): array
     {
         $observations = Observation::whereIn('type', $types)
-            ->whereBetween('recorded_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            ->whereBetween('recorded_at', $this->utcRange($filters))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with(['serviceUser', 'recordedBy'])
             ->orderBy('recorded_at')
@@ -846,7 +873,7 @@ class ReportGeneratorController extends Controller
 
     private function clinicalAlerts(array $filters): array
     {
-        $alerts = ClinicalAlert::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+        $alerts = ClinicalAlert::whereBetween('created_at', $this->utcRange($filters))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with('serviceUser')
             ->orderByDesc('created_at')
@@ -876,7 +903,7 @@ class ReportGeneratorController extends Controller
     private function incidentList(array $filters, ?string $type, string $title): array
     {
         $incidents = $this->scopeByBranch(
-            Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            Incident::whereBetween('created_at', $this->utcRange($filters))
                 ->when($type, fn ($q) => $q->where('type', $type)),
             $filters['branch_id']
         )
@@ -905,7 +932,7 @@ class ReportGeneratorController extends Controller
 
     private function safeguardingList(array $filters): array
     {
-        $cases = SafeguardingCase::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+        $cases = SafeguardingCase::whereBetween('created_at', $this->utcRange($filters))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with('serviceUser')
             ->orderByDesc('created_at')
@@ -933,7 +960,7 @@ class ReportGeneratorController extends Controller
     private function incidentBreakdown(array $filters, string $field, array $values, string $title): array
     {
         $base = $this->scopeByBranch(
-            Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"]),
+            Incident::whereBetween('created_at', $this->utcRange($filters)),
             $filters['branch_id']
         );
 
@@ -958,7 +985,7 @@ class ReportGeneratorController extends Controller
     private function incidentFrequency(array $filters): array
     {
         $incidents = $this->scopeByBranch(
-            Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            Incident::whereBetween('created_at', $this->utcRange($filters))
                 ->whereNotNull('service_user_id'),
             $filters['branch_id']
         )->with('serviceUser')->get();
@@ -984,7 +1011,7 @@ class ReportGeneratorController extends Controller
     private function correctiveActions(array $filters): array
     {
         $incidents = $this->scopeByBranch(
-            Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            Incident::whereBetween('created_at', $this->utcRange($filters))
                 ->whereNotNull('corrective_actions'),
             $filters['branch_id']
         )->with('serviceUser')->orderByDesc('created_at')->get();
@@ -1009,7 +1036,7 @@ class ReportGeneratorController extends Controller
     private function unresolvedActions(array $filters): array
     {
         $openIncidents = $this->scopeByBranch(
-            Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            Incident::whereBetween('created_at', $this->utcRange($filters))
                 ->where('status', '!=', 'closed'),
             $filters['branch_id']
         )->with('serviceUser')->get()->map(fn (Incident $i) => [
@@ -1020,7 +1047,7 @@ class ReportGeneratorController extends Controller
             'status' => str_replace('_', ' ', $i->status),
         ]);
 
-        $openSafeguarding = SafeguardingCase::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+        $openSafeguarding = SafeguardingCase::whereBetween('created_at', $this->utcRange($filters))
             ->where('status', '!=', 'closed')
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with('serviceUser')->get()->map(fn (SafeguardingCase $c) => [
@@ -1139,7 +1166,7 @@ class ReportGeneratorController extends Controller
 
     private function trainingList(array $filters, string $statusFilter, string $title): array
     {
-        $warningDays = 30;
+        $warningDays = (int) TenantSettings::for($this->tenantId(), 'training_expiry_warning_days');
         $records = TrainingRecord::query()
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('user.staffProfile', fn ($sp) => $sp->where('branch_id', $filters['branch_id'])))
             ->with(['user', 'trainingCourse'])
@@ -1687,9 +1714,9 @@ class ReportGeneratorController extends Controller
                 'carer' => $v->carer->name ?? 'Unassigned',
                 'scheduled' => "{$v->start_time}–{$v->end_time}",
                 'status' => str_replace('_', ' ', $v->status),
-                'check_in' => $v->check_in_at?->format('H:i') ?? '—',
+                'check_in' => $this->localTime($v->check_in_at),
                 'check_in_distance_m' => $checkInDistance !== null ? round($checkInDistance) : '—',
-                'check_out' => $v->check_out_at?->format('H:i') ?? '—',
+                'check_out' => $this->localTime($v->check_out_at),
                 'check_out_distance_m' => $checkOutDistance !== null ? round($checkOutDistance) : '—',
                 'trip_verified' => $tripVerified,
                 'override_reason' => $v->override_reason ?? '—',
@@ -1779,7 +1806,7 @@ class ReportGeneratorController extends Controller
             $visits = Visit::whereBetween('visit_date', [$filters['from'], $filters['to']])
                 ->whereHas('serviceUser', fn ($q) => $q->where('branch_id', $branch->id));
 
-            $incidents = Incident::whereBetween('created_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            $incidents = Incident::whereBetween('created_at', $this->utcRange($filters))
                 ->whereHas('serviceUser', fn ($q) => $q->where('branch_id', $branch->id))
                 ->count();
 

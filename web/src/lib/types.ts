@@ -1,9 +1,10 @@
-export interface TenantSettings {
-  geofence_radius_meters?: number;
-  training_expiry_warning_days?: number;
-  /** Minutes of inactivity before a session is force-logged-out. Unset/null = no automatic timeout. */
-  session_timeout_minutes?: number | null;
-}
+import type { EffectiveTenantSettings } from "../modules/settings/defaults";
+
+/** What's sent when saving — any subset. The API returns the full set with defaults filled in. */
+export type TenantSettings = Partial<Omit<EffectiveTenantSettings, "care_pathway" | "reference_data">> & {
+  care_pathway?: Partial<EffectiveTenantSettings["care_pathway"]>;
+  reference_data?: Partial<EffectiveTenantSettings["reference_data"]>;
+};
 
 export interface Tenant {
   id: number;
@@ -15,7 +16,8 @@ export interface Tenant {
   locale: string;
   plan: string;
   status: "active" | "suspended" | "trial";
-  settings: TenantSettings;
+  /** Saved values over defaults — the API always sends the full set. */
+  settings: EffectiveTenantSettings;
   created_at: string;
 }
 
@@ -47,6 +49,16 @@ export interface User {
   mfa_enabled: boolean;
   roles: string[];
   permissions: string[];
+  /** The organisation's preferences — null for platform admins. */
+  tenant: {
+    id: number;
+    name: string;
+    country: string;
+    timezone: string;
+    currency: string;
+    locale: string;
+    settings: EffectiveTenantSettings;
+  } | null;
 }
 
 export interface AuditLogEntry {
@@ -54,14 +66,40 @@ export interface AuditLogEntry {
   tenant_id: number | null;
   user_id: number | null;
   user_name: string | null;
-  action: string;
+  action: "created" | "updated" | "deleted";
   auditable_type: string;
   auditable_id: number;
+  /** "Client", "Medication"… */
+  record_label: string;
+  /** Which one, by name — "Metformin 500mg — Ruth Chikafu". */
+  record_name: string;
+  /** Where to find it in the app; null once deleted. */
+  record_link: string | null;
+  record_exists: boolean;
+  changed_fields: string[];
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
   ip_address: string | null;
   user_agent: string | null;
+  /** "Chrome on Windows". */
+  device: string | null;
   created_at: string;
+}
+
+export interface AuditLogChange {
+  field: string;
+  label: string;
+  before: unknown;
+  after: unknown;
+  /** A name for an id field (care_manager_id 5 → "Tendai Moyo"). */
+  before_display: string | null;
+  after_display: string | null;
+}
+
+export interface AuditLogDetail extends AuditLogEntry {
+  user_email: string | null;
+  user_roles: string[];
+  changes: AuditLogChange[];
 }
 
 export interface Paginated<T> {
@@ -473,26 +511,6 @@ export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
 export const VISIT_PRIORITIES = ["low", "medium", "high"] as const;
 export type VisitPriority = (typeof VISIT_PRIORITIES)[number];
-
-/** Offered as quick-pick suggestions wherever a visit's care tasks are
- * entered — not an enum, since care_tasks stays free text for anything
- * that doesn't fit this list. */
-export const COMMON_CARE_TASKS = [
-  "Personal care",
-  "Morning wash",
-  "Bathing/showering",
-  "Dressing",
-  "Continence care",
-  "Meal preparation",
-  "Medication prompt",
-  "Medication administration",
-  "Mobility support",
-  "Companionship",
-  "Light housekeeping",
-  "Shopping",
-  "Wound care",
-  "Clinical observations",
-];
 
 export interface Visit {
   id: number;

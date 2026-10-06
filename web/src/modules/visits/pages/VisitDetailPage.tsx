@@ -18,6 +18,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { ROSTERING_ROLES } from "../../../lib/types";
 import { getCurrentPosition } from "../../../lib/geolocation";
 import type { VisitStatus } from "../../../lib/types";
+import { formatDateTime } from "../../../lib/preferences";
 
 const STATUS_TONE: Record<VisitStatus, "success" | "warning" | "neutral" | "danger" | "info"> = {
   scheduled: "info",
@@ -251,12 +252,12 @@ export function VisitDetailPage() {
 
           {visit.check_in_at && (
             <p className="mt-3 text-sm text-inksoft">
-              Checked in at {new Date(visit.check_in_at).toLocaleString()}
+              Checked in at {formatDateTime(visit.check_in_at)}
             </p>
           )}
           {visit.check_out_at && (
             <p className="text-sm text-inksoft">
-              Checked out at {new Date(visit.check_out_at).toLocaleString()}
+              Checked out at {formatDateTime(visit.check_out_at)}
             </p>
           )}
         </CardBody>

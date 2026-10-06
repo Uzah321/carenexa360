@@ -6,6 +6,7 @@ import { useBranches } from "../../organization/api";
 import { useGenerateReport } from "../api";
 import { REPORT_CATALOG, type ReportDef } from "../reportCatalog";
 import { startOfMonthIso, todayIso } from "../../../lib/dates";
+import { branchOptionLabel } from "../../organization/branchLabel";
 
 function firstAvailable(reports: ReportDef[]): ReportDef | null {
   return reports.find((r) => r.key) ?? null;
@@ -115,7 +116,7 @@ export function ReportsPage() {
                   <option value="">All Branches</option>
                   {(branches?.data ?? []).map((branch) => (
                     <option key={branch.id} value={branch.id}>
-                      {branch.name}
+                      {branchOptionLabel(branch)}
                     </option>
                   ))}
                 </Select>

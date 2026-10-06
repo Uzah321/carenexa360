@@ -15,6 +15,7 @@ import {
   RowActionsMenu,
   Select,
   StatusBadge,
+  Suggestions,
   TagInput,
   type Column,
 } from "../../../design-system";
@@ -29,6 +30,8 @@ import {
   type UpdateStaffInput,
 } from "../api";
 import { TENANT_ROLES, type StaffMember } from "../../../lib/types";
+import { tenantSettings } from "../../../lib/preferences";
+import { LocationSelect } from "../../organization/components/LocationSelect";
 
 function StaffDetailDrawer({ staff }: { staff: StaffMember }) {
   const updateStaff = useUpdateStaff(staff.id);
@@ -98,7 +101,8 @@ function StaffDetailDrawer({ staff }: { staff: StaffMember }) {
           <FileUpload onSelect={setPendingFile} />
         </div>
         <FormField label="Category" htmlFor="staff-doc-category">
-          <Input id="staff-doc-category" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <Input id="staff-doc-category" list="staff-doc-category-options" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <Suggestions id="staff-doc-category-options" items={tenantSettings().reference_data.staff_document_categories} />
         </FormField>
         <Button onClick={handleUpload} disabled={!pendingFile} isLoading={uploadDocument.isPending}>
           Upload
@@ -135,6 +139,7 @@ const EMPTY_FORM: CreateStaffInput = {
   email: "",
   password: "",
   role: "Carer / Support Worker",
+  branch_id: null,
   job_title: "",
   skills: [],
 };
@@ -146,6 +151,7 @@ const STATUS_TONE: Record<StaffMember["employment_status"], "success" | "warning
 };
 
 const EMPTY_EDIT_FORM: UpdateStaffInput = {
+  branch_id: null,
   job_title: "",
   employment_start_date: "",
   skills: [],
@@ -155,6 +161,7 @@ const EMPTY_EDIT_FORM: UpdateStaffInput = {
 
 function staffToEditForm(staff: StaffMember): UpdateStaffInput {
   return {
+    branch_id: staff.branch_id,
     job_title: staff.job_title ?? "",
     employment_start_date: staff.employment_start_date ?? "",
     skills: staff.skills,
@@ -342,9 +349,13 @@ export function StaffPage() {
               ))}
             </Select>
           </FormField>
+          <FormField label="Location" htmlFor="staff-location">
+            <LocationSelect id="staff-location" value={form.branch_id} onChange={(branch_id) => setForm({ ...form, branch_id })} />
+          </FormField>
           <FormField label="Job title" htmlFor="staff-job-title">
             <Input
               id="staff-job-title"
+              list="job-title-options"
               value={form.job_title ?? ""}
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
@@ -362,6 +373,7 @@ export function StaffPage() {
               id="staff-skills"
               value={form.skills ?? []}
               onChange={(skills) => setForm({ ...form, skills })}
+              suggestions={tenantSettings().reference_data.skills}
               placeholder="Type a skill and press Enter"
             />
           </FormField>
@@ -409,9 +421,13 @@ export function StaffPage() {
               <Alert tone="danger">{editError}</Alert>
             </div>
           )}
+          <FormField label="Location" htmlFor="edit-staff-location">
+            <LocationSelect id="edit-staff-location" value={editForm.branch_id} onChange={(branch_id) => setEditForm({ ...editForm, branch_id })} />
+          </FormField>
           <FormField label="Job title" htmlFor="edit-staff-job-title">
             <Input
               id="edit-staff-job-title"
+              list="job-title-options"
               value={editForm.job_title ?? ""}
               onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
             />
@@ -429,6 +445,7 @@ export function StaffPage() {
               id="edit-staff-skills"
               value={editForm.skills ?? []}
               onChange={(skills) => setEditForm({ ...editForm, skills })}
+              suggestions={tenantSettings().reference_data.skills}
               placeholder="Type a skill and press Enter"
             />
           </FormField>
@@ -472,6 +489,7 @@ export function StaffPage() {
           setDeactivateError(null);
         }}
       />
+      <Suggestions id="job-title-options" items={tenantSettings().reference_data.job_titles} />
     </div>
   );
 }

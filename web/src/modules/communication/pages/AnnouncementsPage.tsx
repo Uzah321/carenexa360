@@ -4,6 +4,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { COMMUNICATION_ROLES } from "../../../lib/types";
 import { useAnnouncements, useCreateAnnouncement, type CreateAnnouncementInput } from "../api";
+import { formatDate } from "../../../lib/preferences";
 
 const EMPTY_FORM: CreateAnnouncementInput = { title: "", body: "" };
 
@@ -54,7 +55,7 @@ export function AnnouncementsPage() {
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-inksoft">{announcement.body}</p>
               <p className="mt-3 text-xs text-inksoft">
-                {announcement.posted_by_name ?? "Unknown"} · {new Date(announcement.created_at).toLocaleDateString()}
+                {announcement.posted_by_name ?? "Unknown"} · {formatDate(announcement.created_at)}
                 {announcement.branch_name && ` · ${announcement.branch_name}`}
               </p>
             </div>

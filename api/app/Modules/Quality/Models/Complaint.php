@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Support\Concerns\BelongsToTenant;
 use App\Support\Concerns\HasAuditLog;
+use App\Support\Time\TenantClock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -35,9 +36,6 @@ class Complaint extends Model
 
     /** Statuses that mean the complaint is still being dealt with. */
     public const OPEN_STATUSES = ['received', 'investigating'];
-
-    /** A full response is due this many days after receipt unless set otherwise (UK practice: 20 working days). */
-    public const RESPONSE_DAYS = 28;
 
     protected $fillable = [
         'tenant_id',
@@ -77,7 +75,9 @@ class Complaint extends Model
 
     public function isOverdue(): bool
     {
-        return $this->isOpen() && $this->response_due_date !== null && $this->response_due_date->isPast() && ! $this->response_due_date->isToday();
+        return $this->isOpen()
+            && $this->response_due_date !== null
+            && $this->response_due_date->toDateString() < TenantClock::today($this->tenant_id);
     }
 
     public function serviceUser(): BelongsTo

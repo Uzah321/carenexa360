@@ -3,6 +3,7 @@ import { Alert, Button, FormField, Input, Modal, Select, TagInput, Textarea } fr
 import { useStaff } from "../../staff/api";
 import { VISIT_PRIORITIES, deliversVisits, type Visit } from "../../../lib/types";
 import { useUpdateVisit, type UpdateVisitInput } from "../api";
+import { tenantSettings } from "../../../lib/preferences";
 
 function visitToEditForm(visit: Visit): UpdateVisitInput {
   return {
@@ -151,6 +152,7 @@ export function EditVisitModal({ visit, onClose }: { visit: Visit | null; onClos
         <FormField label="Care tasks" htmlFor="edit-visit-tasks">
           <TagInput
             id="edit-visit-tasks"
+            suggestions={tenantSettings().reference_data.care_tasks}
             value={editForm.care_tasks ?? []}
             onChange={(care_tasks) => setEditForm({ ...editForm, care_tasks })}
             placeholder="e.g. Morning wash"

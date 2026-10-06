@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { apiClient, ensureCsrfCookie, setSessionExpiredHandler } from "./api-client";
+import { setTenantPreferences } from "./preferences";
 import { queryClient } from "./query-client";
 import type { User } from "./types";
 
@@ -43,8 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUser = useCallback(async () => {
     try {
       const { data } = await apiClient.get<{ data: User }>("/auth/me");
+      // Formatting and suggestions across the app follow these — set them
+      // before the user (and so every page) renders.
+      setTenantPreferences(data.data.tenant);
       setUser(data.data);
     } catch {
+      setTenantPreferences(null);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -64,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // what makes "logged in as" actually mean something between sessions.
     setSessionExpiredHandler(() => {
       queryClient.clear();
+      setTenantPreferences(null);
       setUser(null);
     });
     return () => setSessionExpiredHandler(() => {});
@@ -102,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await apiClient.post("/auth/logout");
     queryClient.clear();
+    setTenantPreferences(null);
     setUser(null);
   }, []);
 

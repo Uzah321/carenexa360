@@ -19,6 +19,7 @@ use App\Modules\Identity\Http\Controllers\AuthController;
 use App\Modules\Identity\Http\Controllers\TwoFactorController;
 use App\Modules\Identity\Http\Controllers\UserRoleController;
 use App\Modules\Incidents\Http\Controllers\IncidentController;
+use App\Modules\Organization\Http\Controllers\DataMaintenanceController;
 use App\Modules\Quality\Http\Controllers\ComplaintController;
 use App\Modules\Quality\Http\Controllers\SpotCheckController;
 use App\Modules\Marketing\Http\Controllers\DemoRequestController;
@@ -87,6 +88,8 @@ Route::prefix('v1')->group(function () {
             });
 
             Route::get('/audit-log', [AuditLogController::class, 'index']);
+            Route::get('/audit-log/record-types', [AuditLogController::class, 'recordTypes']);
+            Route::get('/audit-log/{auditLog}', [AuditLogController::class, 'show']);
 
             Route::prefix('service-users')->group(function () {
                 Route::get('/', [ServiceUserController::class, 'index']);
@@ -101,6 +104,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/{serviceUser}/contacts/{contact}/grant-portal-access', [ServiceUserContactController::class, 'grantPortalAccess']);
 
                 Route::get('/{serviceUser}/care-plans', [CarePlanController::class, 'index']);
+                Route::get('/{serviceUser}/care-pathway', [CarePlanController::class, 'pathway']);
                 Route::post('/{serviceUser}/care-plans', [CarePlanController::class, 'store']);
 
                 Route::get('/{serviceUser}/assessment-responses', [AssessmentResponseController::class, 'index']);
@@ -155,6 +159,12 @@ Route::prefix('v1')->group(function () {
                 Route::get('/{incident}', [IncidentController::class, 'show']);
                 Route::patch('/{incident}', [IncidentController::class, 'update']);
                 Route::patch('/{incident}/archive', [IncidentController::class, 'archive']);
+            });
+
+            Route::prefix('data-maintenance')->group(function () {
+                Route::get('/checks', [DataMaintenanceController::class, 'checks']);
+                Route::get('/exports', [DataMaintenanceController::class, 'exportList']);
+                Route::get('/exports/{dataset}', [DataMaintenanceController::class, 'export']);
             });
 
             Route::prefix('complaints')->group(function () {

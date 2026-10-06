@@ -26,6 +26,7 @@ import {
   useUpdateAssessmentResponse,
 } from "../../assessments/api";
 import type { AssessmentResponse } from "../../../lib/types";
+import { formatDate, formatDateTime } from "../../../lib/preferences";
 
 function fieldLabel(templates: ReturnType<typeof useAssessmentTemplates>["data"], response: AssessmentResponse, key: string) {
   const template = templates?.find((t) => t.id === response.assessment_template_id);
@@ -108,7 +109,7 @@ export function AssessmentsTab({ serviceUserId }: { serviceUserId: number }) {
     {
       key: "completed_at",
       header: "Completed",
-      render: (row) => (row.completed_at ? new Date(row.completed_at).toLocaleDateString() : "—"),
+      render: (row) => (row.completed_at ? formatDate(row.completed_at) : "—"),
     },
     {
       key: "status",
@@ -282,7 +283,7 @@ export function AssessmentsTab({ serviceUserId }: { serviceUserId: number }) {
               <div className="flex justify-between border-b border-line py-2 text-sm last:border-0">
                 <dt className="text-inksoft">Completed at</dt>
                 <dd className="font-medium text-ink">
-                  {viewingResponse.completed_at ? new Date(viewingResponse.completed_at).toLocaleString() : "—"}
+                  {viewingResponse.completed_at ? formatDateTime(viewingResponse.completed_at) : "—"}
                 </dd>
               </div>
             </dl>

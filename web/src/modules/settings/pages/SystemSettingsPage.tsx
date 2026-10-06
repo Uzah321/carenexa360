@@ -8,7 +8,6 @@ import {
   CardHeader,
   ConfirmDialog,
   DataTable,
-  EmptyState,
   FormField,
   Input,
   Modal,
@@ -23,6 +22,11 @@ import {
 import { useAuth } from "../../../lib/auth-context";
 import { apiErrorMessage } from "../../../lib/api-error";
 import type { Branch } from "../../../lib/types";
+import { CarePathwayTab } from "../components/CarePathwayTab";
+import { DataMaintenanceTab } from "../components/DataMaintenanceTab";
+import { GeneralSettingsTab } from "../components/GeneralSettingsTab";
+import { ReferenceDataTab } from "../components/ReferenceDataTab";
+import { Suggestions } from "../../../design-system";
 import {
   useBranches,
   useCreateBranch,
@@ -43,9 +47,18 @@ const TABS: TabItem[] = [
   { key: "pathway", label: "Care Pathway" },
 ];
 
+const TIMEZONES: string[] = (() => {
+  try {
+    return (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf("timeZone");
+  } catch {
+    return ["Europe/London", "Africa/Harare", "Africa/Johannesburg", "Africa/Lusaka", "UTC"];
+  }
+})();
+
 function CompanyDetailsTab({ tenantId }: { tenantId: number }) {
   const { data: tenant, isLoading } = useTenant(tenantId);
   const updateTenant = useUpdateTenant(tenantId);
+  const { refreshUser } = useAuth();
   const [form, setForm] = useState({ name: "", country: "", timezone: "", currency: "", locale: "" });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,9 +81,11 @@ function CompanyDetailsTab({ tenantId }: { tenantId: number }) {
     setError(null);
     try {
       await updateTenant.mutateAsync(form);
+      // Currency, locale and timezone shape formatting across the whole app.
+      await refreshUser();
       setSaved(true);
-    } catch {
-      setError("Something went wrong saving your changes. Please try again.");
+    } catch (err) {
+      setError(apiErrorMessage(err, "Something went wrong saving your changes. Please try again."));
     }
   }
 
@@ -113,6 +128,7 @@ function CompanyDetailsTab({ tenantId }: { tenantId: number }) {
               <Input
                 id="company-timezone"
                 required
+                list="timezone-options"
                 value={form.timezone}
                 onChange={(e) => setForm({ ...form, timezone: e.target.value })}
               />
@@ -123,6 +139,8 @@ function CompanyDetailsTab({ tenantId }: { tenantId: number }) {
               <Input
                 id="company-currency"
                 required
+                maxLength={3}
+                list="currency-options"
                 value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value })}
               />
@@ -131,11 +149,20 @@ function CompanyDetailsTab({ tenantId }: { tenantId: number }) {
               <Input
                 id="company-locale"
                 required
+                list="locale-options"
+                placeholder="e.g. en-GB"
                 value={form.locale}
                 onChange={(e) => setForm({ ...form, locale: e.target.value })}
               />
             </FormField>
           </div>
+          <p className="mb-4 text-xs text-inksoft">
+            Currency and locale set how money and dates are shown everywhere in the app; the timezone decides what "today" is
+            and how visit, dose and shift times are compared with when staff actually checked in.
+          </p>
+          <Suggestions id="timezone-options" items={TIMEZONES} />
+          <Suggestions id="currency-options" items={["GBP", "USD", "EUR", "ZAR", "ZMW", "ZWL"]} />
+          <Suggestions id="locale-options" items={["en-GB", "en-ZW", "en-ZA", "en-ZM", "en-IE", "en-US"]} />
           <Button type="submit" isLoading={updateTenant.isPending}>
             Save changes
           </Button>
@@ -381,124 +408,6 @@ function LocationsTab({ tenantId }: { tenantId: number }) {
   );
 }
 
-function GeneralSettingsTab({ tenantId }: { tenantId: number }) {
-  const { data: tenant, isLoading } = useTenant(tenantId);
-  const updateTenant = useUpdateTenant(tenantId);
-  const [geofence, setGeofence] = useState("100");
-  const [trainingWindow, setTrainingWindow] = useState("30");
-  const [sessionTimeout, setSessionTimeout] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (tenant) {
-      setGeofence(String(tenant.settings.geofence_radius_meters ?? 100));
-      setTrainingWindow(String(tenant.settings.training_expiry_warning_days ?? 30));
-      setSessionTimeout(
-        tenant.settings.session_timeout_minutes ? String(tenant.settings.session_timeout_minutes) : "",
-      );
-    }
-  }, [tenant]);
-
-  async function handleSave(event: FormEvent) {
-    event.preventDefault();
-    setSaved(false);
-    setError(null);
-    try {
-      await updateTenant.mutateAsync({
-        settings: {
-          geofence_radius_meters: Number(geofence),
-          training_expiry_warning_days: Number(trainingWindow),
-          session_timeout_minutes: sessionTimeout ? Number(sessionTimeout) : null,
-        },
-      });
-      setSaved(true);
-    } catch {
-      setError("Something went wrong saving your changes. Please try again.");
-    }
-  }
-
-  if (isLoading || !tenant) {
-    return (
-      <Card>
-        <CardBody>Loading…</CardBody>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>General Settings</CardHeader>
-      <CardBody>
-        {saved && (
-          <div className="mb-4">
-            <Alert tone="success">Settings saved — these take effect immediately across the app.</Alert>
-          </div>
-        )}
-        {error && (
-          <div className="mb-4">
-            <Alert tone="danger">{error}</Alert>
-          </div>
-        )}
-        <form onSubmit={handleSave} className="max-w-lg">
-          <FormField label="Visit check-in geofence radius (meters)" htmlFor="geofence-radius">
-            <Input
-              id="geofence-radius"
-              type="number"
-              min={10}
-              max={2000}
-              required
-              value={geofence}
-              onChange={(e) => setGeofence(e.target.value)}
-            />
-          </FormField>
-          <p className="-mt-3 mb-4 text-xs text-inksoft">
-            How far a carer's GPS position may be from a service user's address at check-in/check-out before an
-            override reason is required.
-          </p>
-          <FormField label="Training expiry warning window (days)" htmlFor="training-window">
-            <Input
-              id="training-window"
-              type="number"
-              min={1}
-              max={180}
-              required
-              value={trainingWindow}
-              onChange={(e) => setTrainingWindow(e.target.value)}
-            />
-          </FormField>
-          <p className="-mt-3 mb-4 text-xs text-inksoft">
-            How many days before a training certificate expires it's flagged as "expiring soon" on Today, Reports,
-            and the Operations Dashboard.
-          </p>
-          <FormField label="Session timeout (minutes)" htmlFor="session-timeout">
-            <Input
-              id="session-timeout"
-              type="number"
-              min={5}
-              max={1440}
-              placeholder="No automatic timeout"
-              value={sessionTimeout}
-              onChange={(e) => setSessionTimeout(e.target.value)}
-            />
-          </FormField>
-          <p className="-mt-3 mb-4 text-xs text-inksoft">
-            How long staff can be idle before they're automatically signed out. Leave blank for no automatic
-            timeout.
-          </p>
-          <Button type="submit" isLoading={updateTenant.isPending}>
-            Save changes
-          </Button>
-        </form>
-      </CardBody>
-    </Card>
-  );
-}
-
-function ComingSoonTab({ label }: { label: string }) {
-  return <EmptyState message={`${label} is coming soon.`} />;
-}
-
 export function SystemSettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("company");
@@ -528,9 +437,9 @@ export function SystemSettingsPage() {
           </CardBody>
         </Card>
       )}
-      {activeTab === "data" && <ComingSoonTab label="Data Maintenance" />}
-      {activeTab === "reference" && <ComingSoonTab label="Reference Data Management" />}
-      {activeTab === "pathway" && <ComingSoonTab label="Care Pathway" />}
+      {activeTab === "data" && <DataMaintenanceTab />}
+      {activeTab === "reference" && <ReferenceDataTab tenantId={tenantId} />}
+      {activeTab === "pathway" && <CarePathwayTab tenantId={tenantId} />}
     </div>
   );
 }

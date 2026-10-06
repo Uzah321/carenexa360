@@ -3,7 +3,8 @@ import { Alert, Button, FormField, Input, Modal, Select, TagInput } from "../../
 import { useServiceUsers } from "../../service-users/api";
 import { useCreateVisit, type CreateVisitInput } from "../api";
 import { todayIso } from "../../../lib/dates";
-import { COMMON_CARE_TASKS } from "../../../lib/types";
+import { tenantMinutesNow } from "../../../lib/preferences";
+import { tenantSettings } from "../../../lib/preferences";
 
 function errorMessage(err: unknown): string {
   const response = (err as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } })
@@ -31,7 +32,7 @@ function addOneHour(time: string): string {
 
 function defaultTaskFields(date: string) {
   const isToday = date === todayIso();
-  let startHour = isToday ? new Date().getHours() + 1 : 9;
+  let startHour = isToday ? Math.floor(tenantMinutesNow() / 60) + 1 : 9;
   if (startHour > 22) startHour = 22;
 
   return {
@@ -162,7 +163,7 @@ export function AssignTaskModal({
             value={fields.care_tasks}
             onChange={(care_tasks) => setFields({ ...fields, care_tasks })}
             placeholder="e.g. Morning wash"
-            suggestions={COMMON_CARE_TASKS}
+            suggestions={tenantSettings().reference_data.care_tasks}
           />
         </FormField>
       </form>

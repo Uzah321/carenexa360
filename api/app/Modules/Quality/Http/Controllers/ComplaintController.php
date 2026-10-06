@@ -3,12 +3,14 @@
 namespace App\Modules\Quality\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Modules\Quality\Http\Requests\SaveComplaintRequest;
 use App\Modules\Quality\Http\Resources\ComplaintResource;
 use App\Modules\Quality\Models\Complaint;
 use App\Modules\Quality\Support\QualityRoles;
 use App\Notifications\AssignmentMessages;
 use App\Support\AssignmentNotifier;
+use App\Support\Time\TenantClock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -39,7 +41,9 @@ class ComplaintController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'status' => $attributes['status'] ?? 'received',
             'response_due_date' => $attributes['response_due_date']
-                ?? Carbon::parse($attributes['received_date'])->addDays(Complaint::RESPONSE_DAYS)->toDateString(),
+                ?? Carbon::parse($attributes['received_date'])
+                    ->addDays((int) TenantSettings::for($request->user()->tenant_id, 'complaint_response_days'))
+                    ->toDateString(),
             'created_by' => $request->user()->id,
         ]);
 
@@ -64,7 +68,7 @@ class ComplaintController extends Controller
 
         // Closing it out stamps the date it was resolved, unless one was given.
         if (in_array($attributes['status'] ?? null, ['resolved', 'closed'], true) && ! $complaint->resolved_date && empty($attributes['resolved_date'])) {
-            $attributes['resolved_date'] = now()->toDateString();
+            $attributes['resolved_date'] = TenantClock::today($complaint->tenant_id);
         }
 
         $previousAssignee = $complaint->assigned_to;

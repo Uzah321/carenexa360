@@ -8,6 +8,7 @@ use App\Modules\Organization\Http\Requests\UpdateTenantRequest;
 use App\Modules\Organization\Http\Requests\UpdateTenantStatusRequest;
 use App\Modules\Organization\Http\Resources\TenantResource;
 use App\Modules\Organization\Models\Tenant;
+use App\Modules\Organization\Support\TenantSettings;
 use Illuminate\Http\Request;
 
 class TenantController extends Controller
@@ -49,7 +50,12 @@ class TenantController extends Controller
             $attributes['settings'] = array_merge($tenant->settings ?? [], $attributes['settings']);
         }
 
+        if (isset($attributes['currency'])) {
+            $attributes['currency'] = strtoupper($attributes['currency']);
+        }
+
         $tenant->update($attributes);
+        TenantSettings::forget($tenant->id);
 
         return new TenantResource($tenant->fresh());
     }

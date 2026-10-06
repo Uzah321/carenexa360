@@ -9,14 +9,17 @@ import {
   type Column,
 } from "../../../design-system";
 import { useOperationsDashboard, type OperationsDashboardData } from "../api";
+import { getTenantPreferences } from "../../../lib/preferences";
+import { formatCurrency } from "../../../lib/currency";
 
 function weekLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleDateString(getTenantPreferences().locale, { month: "short", day: "numeric" });
 }
 
+/** Whole units in the organisation's currency (System Settings → Company Details). */
 function money(value: number): string {
-  return `£${value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+  return formatCurrency(value, undefined, { decimals: 0 });
 }
 
 export function OperationsDashboardPage() {

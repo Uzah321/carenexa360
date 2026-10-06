@@ -4,6 +4,7 @@ import type {
   MedicationAdministrationStatus,
   MedicationNotGivenReason,
 } from "../../lib/types";
+import { tenantMinutesNow } from "../../lib/preferences";
 
 export const NOT_GIVEN_REASON_LABELS: Record<MedicationNotGivenReason, string> = {
   refused: "Refused",
@@ -82,7 +83,7 @@ export function buildRound(medications: Medication[]): RoundSlot[] {
 }
 
 /** Whether a "HH:mm" slot is already past today. */
-export function isPastDue(time: string, now: Date = new Date()): boolean {
+export function isPastDue(time: string, now?: Date): boolean {
   const [hours, minutes] = time.split(":").map(Number);
-  return now.getHours() * 60 + now.getMinutes() > hours * 60 + minutes;
+  return (now ? now.getHours() * 60 + now.getMinutes() : tenantMinutesNow()) > hours * 60 + minutes;
 }

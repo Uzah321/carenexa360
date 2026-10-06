@@ -8,6 +8,7 @@ use App\Modules\Billing\Models\Funder;
 use App\Modules\Billing\Models\Invoice;
 use App\Modules\CareNotes\Models\CareNote;
 use App\Modules\CarePlanning\Models\CarePlan;
+use App\Modules\CarePlanning\Support\CarePathway;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Hr\Models\LeaveRequest;
 use App\Modules\Incidents\Models\Incident;
@@ -15,6 +16,7 @@ use App\Modules\Medications\Models\Medication;
 use App\Modules\Medications\Models\MedicationAdministration;
 use App\Modules\Observations\Models\Observation;
 use App\Modules\Organization\Models\Tenant;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Modules\Quality\Models\Complaint;
 use App\Modules\Quality\Models\SpotCheck;
 use App\Modules\Rostering\Models\Shift;
@@ -25,6 +27,7 @@ use App\Modules\Tracking\Models\CarerLocation;
 use App\Modules\Tracking\Models\DutyPeriod;
 use App\Modules\Visits\Models\Visit;
 use App\Support\Geo\Haversine;
+use App\Support\Time\TenantClock;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
@@ -53,14 +56,27 @@ class OperationalReports
 
     // ---- Shared helpers ---------------------------------------------------
 
+    /** Start of the first day, local to the tenant, as a UTC instant (timestamps are stored in UTC). */
     private function from(): Carbon
     {
-        return Carbon::parse($this->filters['from'])->startOfDay();
+        return TenantClock::dayBoundsUtc($this->tenantId(), $this->filters['from'])[0];
     }
 
+    /** End of the last day, local to the tenant, as a UTC instant. */
     private function to(): Carbon
     {
-        return Carbon::parse($this->filters['to'])->endOfDay();
+        return TenantClock::dayBoundsUtc($this->tenantId(), $this->filters['to'])[1];
+    }
+
+    private function tenantId(): ?int
+    {
+        return auth()->user()?->tenant_id;
+    }
+
+    /** A UTC timestamp in the tenant's local time. */
+    private function local(\DateTimeInterface $instant): Carbon
+    {
+        return TenantClock::local($this->tenantId(), $instant);
     }
 
     private function branchId(): ?int
@@ -75,7 +91,7 @@ class OperationalReports
 
     private function setting(string $key, mixed $default): mixed
     {
-        return $this->tenant()?->setting($key, $default) ?? $default;
+        return TenantSettings::for($this->tenantId(), $key) ?? $default;
     }
 
     private function clientName(?ServiceUser $serviceUser): string
@@ -212,7 +228,7 @@ class OperationalReports
                 ['key' => 'status', 'label' => 'Status'],
             ],
             'rows' => $plans->map(fn (CarePlan $p) => [
-                'when' => $p->created_at->format('Y-m-d H:i'),
+                'when' => $this->local($p->created_at)->format('Y-m-d H:i'),
                 'client' => $this->clientName($p->serviceUser),
                 'version' => $p->version,
                 'effective_from' => $p->effective_from?->toDateString() ?? '—',
@@ -242,7 +258,7 @@ class OperationalReports
                 ['key' => 'audio', 'label' => 'Voice Note'],
             ],
             'rows' => $notes->map(fn (CareNote $n) => [
-                'when' => $n->created_at->format('Y-m-d H:i'),
+                'when' => $this->local($n->created_at)->format('Y-m-d H:i'),
                 'client' => $this->clientName($n->serviceUser),
                 'author' => $n->author->name ?? '—',
                 'note' => $n->caption ?: '—',
@@ -295,7 +311,7 @@ class OperationalReports
             ->when($this->branchId(), fn ($q) => $q->where('branch_id', $this->branchId()))
             ->get()
             ->map(fn (ServiceUser $su) => [
-                'date' => $su->created_at->toDateString(),
+                'date' => $this->local($su->created_at)->toDateString(),
                 'client' => $this->clientName($su),
                 'event' => 'Admitted',
                 'funding' => $su->funding_source ?? '—',
@@ -316,7 +332,7 @@ class OperationalReports
                 }
 
                 return [
-                    'date' => $log->created_at->toDateString(),
+                    'date' => $this->local($log->created_at)->toDateString(),
                     'client' => $this->clientName($su),
                     'event' => 'Discharged',
                     'funding' => $su->funding_source ?? '—',
@@ -335,6 +351,53 @@ class OperationalReports
                 ['key' => 'details', 'label' => 'Details'],
             ],
             'rows' => $admitted->concat($discharged)->sortByDesc('date')->values(),
+        ];
+    }
+
+    /** Every active client's progress against the care pathway timescales, most overdue first. */
+    public function carePathway(): array
+    {
+        $labels = ['done' => 'Done', 'done_late' => 'Done late', 'due' => 'Due', 'overdue' => 'Overdue', 'waiting' => '—'];
+        $cell = fn (?array $stage) => $stage === null ? '—' : match ($stage['status']) {
+            'done', 'done_late' => $labels[$stage['status']].' ('.$stage['done'].')',
+            'due', 'overdue' => $labels[$stage['status']].' ('.$stage['due'].')',
+            default => '—',
+        };
+
+        $rows = ServiceUser::where('status', 'active')
+            ->when($this->branchId(), fn ($q) => $q->where('branch_id', $this->branchId()))
+            ->get()
+            ->map(function (ServiceUser $su) use ($cell) {
+                $pathway = CarePathway::for($su);
+                $stage = fn (string $key) => collect($pathway['stages'])->firstWhere('key', $key);
+
+                return [
+                    'client' => $this->clientName($su),
+                    'referred' => $stage('referral')['done'] ?? '—',
+                    'assessment' => $cell($stage('assessment')),
+                    'care_plan' => $cell($stage('care_plan')),
+                    'first_review' => $cell($stage('first_review')),
+                    'next_review' => $cell($stage('next_review')),
+                    'risk_review' => $cell($stage('risk_review')),
+                    'overdue' => $pathway['overdue'],
+                ];
+            })
+            ->sortByDesc('overdue')
+            ->values();
+
+        return [
+            'title' => 'Care Pathway',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'referred', 'label' => 'Referred'],
+                ['key' => 'assessment', 'label' => 'Assessment'],
+                ['key' => 'care_plan', 'label' => 'Care Plan'],
+                ['key' => 'first_review', 'label' => 'First Review'],
+                ['key' => 'next_review', 'label' => 'Next Review'],
+                ['key' => 'risk_review', 'label' => 'Risk Review'],
+                ['key' => 'overdue', 'label' => 'Stages Overdue'],
+            ],
+            'rows' => $rows,
         ];
     }
 
@@ -486,7 +549,7 @@ class OperationalReports
 
                     return [
                         'when' => $o->recorded_at,
-                        'date' => $o->recorded_at->format('Y-m-d'),
+                        'date' => $this->local($o->recorded_at)->format('Y-m-d'),
                         'client' => $this->clientName($o->serviceUser),
                         'site' => $v['site'] ?? '—',
                         'size' => isset($v['length_cm'], $v['width_cm'])
@@ -529,7 +592,7 @@ class OperationalReports
     /** Each rostered shift checked against the staff member's clock-ins. */
     public function staffAttendance(): array
     {
-        $grace = (int) $this->setting('late_arrival_minutes', 15);
+        $grace = (int) $this->setting('late_arrival_minutes', 10);
         $shifts = Shift::whereBetween('shift_date', [$this->filters['from'], $this->filters['to']])
             ->where('status', '!=', 'cancelled')
             ->when($this->branchId(), fn ($q) => $q->where('branch_id', $this->branchId()))
@@ -556,8 +619,8 @@ class OperationalReports
             ],
             'rows' => $shifts->map(function (Shift $s) use ($duty, $leave, $grace) {
                 $date = $s->shift_date->toDateString();
-                $start = Carbon::parse("{$date} {$s->start_time}");
-                $end = Carbon::parse("{$date} {$s->end_time}");
+                $start = TenantClock::wallClock($this->tenantId(), $date, $s->start_time);
+                $end = TenantClock::wallClock($this->tenantId(), $date, $s->end_time);
                 if ($end->lte($start)) {
                     $end->addDay();
                 }
@@ -582,8 +645,8 @@ class OperationalReports
                     'date' => $date,
                     'staff' => $s->user->name ?? '—',
                     'shift' => $this->hm($s->start_time).'–'.$this->hm($s->end_time),
-                    'clocked_in' => $period?->started_at->format('H:i') ?? '—',
-                    'clocked_out' => $period?->ended_at?->format('H:i') ?? ($period ? 'Still on duty' : '—'),
+                    'clocked_in' => $period ? $this->local($period->started_at)->format('H:i') : '—',
+                    'clocked_out' => $period?->ended_at ? $this->local($period->ended_at)->format('H:i') : ($period ? 'Still on duty' : '—'),
                     'status' => $status,
                 ];
             })->values(),
@@ -609,8 +672,8 @@ class OperationalReports
             ],
             'rows' => $periods->map(fn (DutyPeriod $d) => [
                 'staff' => $d->carer->name ?? '—',
-                'clock_in' => $d->started_at->format('Y-m-d H:i'),
-                'clock_out' => $d->ended_at?->format('Y-m-d H:i') ?? 'Still on duty',
+                'clock_in' => $this->local($d->started_at)->format('Y-m-d H:i'),
+                'clock_out' => $d->ended_at ? $this->local($d->ended_at)->format('Y-m-d H:i') : 'Still on duty',
                 'hours' => $d->ended_at ? round($this->hoursBetween($d->started_at, $d->ended_at), 2) : '—',
                 'closed' => $d->closed_by ? (($d->closedBy->name ?? 'Manager').($d->close_reason ? " — {$d->close_reason}" : '')) : ($d->ended_at ? 'Self' : '—'),
             ]),
@@ -629,7 +692,7 @@ class OperationalReports
         $visits = $this->visitsInRange()->where('status', 'completed')->whereNotNull('carer_id')->get();
         $week = fn (Carbon $d) => $d->copy()->startOfWeek()->toDateString();
 
-        $clocked = $duty->groupBy(fn (DutyPeriod $d) => $d->user_id.'|'.$week($d->started_at))
+        $clocked = $duty->groupBy(fn (DutyPeriod $d) => $d->user_id.'|'.$week($this->local($d->started_at)))
             ->map(fn ($g) => $g->sum(fn (DutyPeriod $d) => $this->hoursBetween($d->started_at, $d->ended_at)));
         $visitHours = $visits->groupBy(fn (Visit $v) => $v->carer_id.'|'.$week($v->visit_date))
             ->map(fn ($g) => $g->sum(fn (Visit $v) => $this->deliveredHours($v)));
@@ -817,7 +880,7 @@ class OperationalReports
             ->where(fn ($q) => $q->whereNull('accuracy')->orWhere('accuracy', '<=', self::MAX_GPS_ACCURACY_METERS))
             ->orderBy('recorded_at')
             ->get(['user_id', 'latitude', 'longitude', 'recorded_at'])
-            ->groupBy(fn ($p) => $p->user_id.'|'.$p->recorded_at->toDateString());
+            ->groupBy(fn ($p) => $p->user_id.'|'.$this->local($p->recorded_at)->toDateString());
         $visits = $this->visitsInRange()->whereNotNull('carer_id')->where('status', '!=', 'cancelled')
             ->with('serviceUser')->orderBy('start_time')->get()
             ->groupBy(fn (Visit $v) => $v->carer_id.'|'.$v->visit_date->toDateString());
@@ -1191,7 +1254,7 @@ class OperationalReports
                 'severity' => $this->label($c->severity),
                 'status' => $this->label($c->status),
                 'assigned_to' => $c->assignedTo->name ?? 'Unassigned',
-                'days' => $c->resolved_date ? (int) $c->received_date->diffInDays($c->resolved_date) : (int) $c->received_date->diffInDays(now()->startOfDay()).' (open)',
+                'days' => $c->resolved_date ? (int) $c->received_date->diffInDays($c->resolved_date) : (int) $c->received_date->diffInDays(Carbon::parse(TenantClock::today($this->tenantId()))).' (open)',
                 'response' => match (true) {
                     $c->isOverdue() => 'Overdue (due '.$c->response_due_date->toDateString().')',
                     $c->isOpen() => 'Due '.($c->response_due_date?->toDateString() ?? '—'),
@@ -1243,10 +1306,12 @@ class OperationalReports
     public function serviceQualityIndicators(): array
     {
         $visits = $this->visitsInRange()->whereNotIn('status', ['cancelled'])->get();
-        $past = $visits->filter(fn (Visit $v) => $v->visit_date->lt(now()->startOfDay()) || $v->status === 'completed');
+        $today = TenantClock::today($this->tenantId());
+        $grace = (int) $this->setting('late_arrival_minutes', 10);
+        $past = $visits->filter(fn (Visit $v) => $v->visit_date->toDateString() < $today || $v->status === 'completed');
         $completed = $visits->where('status', 'completed');
         $onTime = $completed->filter(fn (Visit $v) => $v->check_in_at
-            && $v->check_in_at->lte(Carbon::parse($v->visit_date->toDateString().' '.$v->start_time)->addMinutes(15)));
+            && $v->check_in_at->lte(TenantClock::wallClock($this->tenantId(), $v->visit_date->toDateString(), $v->start_time)->addMinutes($grace)));
 
         $doses = MedicationAdministration::whereBetween('administered_at', [$this->from(), $this->to()])
             ->where('status', '!=', 'prn')->get();
@@ -1270,7 +1335,7 @@ class OperationalReports
             ],
             'rows' => [
                 $kpi('Visits completed', $this->percent($completed->count(), $past->count()), 'Completed visits out of visits due so far'),
-                $kpi('Visits on time', $this->percent($onTime->count(), $completed->count()), 'Checked in within 15 minutes of the start time'),
+                $kpi('Visits on time', $this->percent($onTime->count(), $completed->count()), "Checked in within {$grace} minutes of the start time"),
                 $kpi('Missed visits', $visits->where('status', 'missed')->count(), 'Visits marked missed'),
                 $kpi('Medication given as scheduled', $this->percent($doses->where('status', 'administered')->count(), $doses->count()), 'Given doses out of all scheduled doses recorded'),
                 $kpi('Incidents per 100 visits', $completed->count() ? round($incidents / $completed->count() * 100, 1) : '—', 'Incidents reported against completed visits'),

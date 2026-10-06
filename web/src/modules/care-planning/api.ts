@@ -112,6 +112,30 @@ export function useCreateCarePlan(serviceUserId: number) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "care-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "care-pathway"] });
     },
+  });
+}
+
+export interface CarePathwayStage {
+  key: string;
+  label: string;
+  /** done = on time; done_late; due = not yet, by `due`; overdue; waiting = can't be scheduled yet. */
+  status: "done" | "done_late" | "due" | "overdue" | "waiting";
+  due: string | null;
+  done: string | null;
+}
+
+/** Where the client is on the care pathway (System Settings → Care Pathway). */
+export function useCarePathway(serviceUserId: number) {
+  return useQuery({
+    queryKey: ["service-users", serviceUserId, "care-pathway"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: { stages: CarePathwayStage[]; overdue: number } }>(
+        `/service-users/${serviceUserId}/care-pathway`,
+      );
+      return data.data;
+    },
+    enabled: Boolean(serviceUserId),
   });
 }

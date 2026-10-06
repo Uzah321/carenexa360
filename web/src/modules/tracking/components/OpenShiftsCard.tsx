@@ -11,6 +11,7 @@ import {
   Textarea,
 } from "../../../design-system";
 import { useForceCloseDutyPeriod, useOpenDutyPeriods, type DutyPeriod } from "../api";
+import { getTenantPreferences } from "../../../lib/preferences";
 
 /**
  * A shift running longer than this almost certainly means the carer forgot to
@@ -32,11 +33,8 @@ function formatDuration(startedAt: string): string {
 }
 
 function formatStart(startedAt: string): string {
-  return new Date(startedAt).toLocaleString(undefined, {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const { locale, timezone } = getTenantPreferences();
+  return new Intl.DateTimeFormat(locale, { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: timezone }).format(new Date(startedAt));
 }
 
 export function OpenShiftsCard() {

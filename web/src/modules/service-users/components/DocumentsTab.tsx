@@ -12,12 +12,14 @@ import {
   FormField,
   Input,
   RowActionsMenu,
+  Suggestions,
   type Column,
   type RowAction,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { downloadDocument, useDeleteDocument, useServiceUserDocuments, useUploadDocument } from "../../documents/api";
 import type { CareDocument } from "../../../lib/types";
+import { tenantSettings } from "../../../lib/preferences";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -92,7 +94,8 @@ export function DocumentsTab({ serviceUserId }: { serviceUserId: number }) {
             <FileUpload onSelect={setPendingFile} />
           </div>
           <FormField label="Category" htmlFor="doc-category">
-            <Input id="doc-category" value={category} onChange={(e) => setCategory(e.target.value)} />
+            <Input id="doc-category" list="doc-category-options" value={category} onChange={(e) => setCategory(e.target.value)} />
+            <Suggestions id="doc-category-options" items={tenantSettings().reference_data.client_document_categories} />
           </FormField>
           <Button onClick={handleUpload} disabled={!pendingFile} isLoading={upload.isPending}>
             Upload

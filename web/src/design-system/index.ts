@@ -27,3 +27,4 @@ export * from "./form/Checkbox";
 export * from "./form/Textarea";
 export * from "./form/Button";
 export * from "./form/RichTextEditor";
+export * from "./form/Suggestions";

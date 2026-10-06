@@ -3,9 +3,11 @@
 namespace App\Modules\Medications\Models;
 
 use App\Models\User;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Support\Concerns\BelongsToTenant;
 use App\Support\Concerns\HasAuditLog;
+use App\Support\Time\TenantClock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +43,11 @@ class Medication extends Model
         'status',
         'created_by',
         'archived_at',
+    ];
+
+    /** Matches the column default, so a medication just created already knows it. */
+    protected $attributes = [
+        'units_per_dose' => 1,
     ];
 
     protected function casts(): array
@@ -104,12 +111,17 @@ class Medication extends Model
         $days = $this->daysOfStockLeft();
 
         return ($this->reorder_level !== null && $this->stock_on_hand <= $this->reorder_level)
-            || ($days !== null && $days <= 7);
+            || ($days !== null && $days <= (int) TenantSettings::for($this->tenant_id, 'stock_reorder_days'));
     }
 
     /** Today's records — what the day's medication round is checked against. */
     public function todayAdministrations(): HasMany
     {
-        return $this->administrations()->whereDate('administered_at', today());
+        // When eager loading, this runs on a blank model with no tenant yet —
+        // the signed-in user's organisation is the same one.
+        return $this->administrations()->whereBetween(
+            'administered_at',
+            TenantClock::dayBoundsUtc($this->tenant_id ?? auth()->user()?->tenant_id),
+        );
     }
 }

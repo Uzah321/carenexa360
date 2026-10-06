@@ -29,6 +29,7 @@ import {
   type ServiceUserInput,
 } from "../api";
 import type { ServiceUser } from "../../../lib/types";
+import { LocationSelect } from "../../organization/components/LocationSelect";
 
 const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
 
@@ -44,6 +45,7 @@ const EMPTY_FORM: ServiceUserInput = {
   preferred_name: "",
   date_of_birth: "",
   nhs_number: "",
+  branch_id: null,
   referring_hospital: "",
   hospital_record_number: "",
   discharge_date: "",
@@ -57,6 +59,7 @@ function serviceUserToForm(serviceUser: ServiceUser): ServiceUserInput {
     preferred_name: serviceUser.preferred_name ?? "",
     date_of_birth: serviceUser.date_of_birth ?? "",
     nhs_number: serviceUser.nhs_number ?? "",
+    branch_id: serviceUser.branch_id,
     gender: serviceUser.gender ?? "",
     phone: serviceUser.phone ?? "",
     address: serviceUser.address ?? "",
@@ -309,6 +312,9 @@ export function ServiceUsersPage() {
               onChange={(e) => setForm({ ...form, preferred_name: e.target.value })}
             />
           </FormField>
+          <FormField label="Location" htmlFor="client-location">
+            <LocationSelect id="client-location" value={form.branch_id} onChange={(branch_id) => setForm({ ...form, branch_id })} />
+          </FormField>
           <FormField label="Date of birth" htmlFor="date_of_birth">
             <Input
               id="date_of_birth"
@@ -417,6 +423,13 @@ export function ServiceUsersPage() {
               id="edit-preferred-name"
               value={editForm.preferred_name ?? ""}
               onChange={(e) => setEditForm({ ...editForm, preferred_name: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Location" htmlFor="edit-client-location">
+            <LocationSelect
+              id="edit-client-location"
+              value={editForm.branch_id}
+              onChange={(branch_id) => setEditForm({ ...editForm, branch_id })}
             />
           </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

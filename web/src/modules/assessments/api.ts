@@ -68,6 +68,8 @@ export function useCreateAssessmentResponse(serviceUserId: number) {
       void queryClient.invalidateQueries({
         queryKey: ["service-users", serviceUserId, "assessment-responses"],
       });
+      // A completed assessment moves the client along the care pathway.
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "care-pathway"] });
     },
   });
 }
@@ -91,6 +93,8 @@ export function useUpdateAssessmentResponse(serviceUserId: number) {
       void queryClient.invalidateQueries({
         queryKey: ["service-users", serviceUserId, "assessment-responses"],
       });
+      // A completed assessment moves the client along the care pathway.
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "care-pathway"] });
     },
   });
 }
@@ -109,6 +113,8 @@ export function useArchiveAssessmentResponse(serviceUserId: number) {
       void queryClient.invalidateQueries({
         queryKey: ["service-users", serviceUserId, "assessment-responses"],
       });
+      // A completed assessment moves the client along the care pathway.
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "care-pathway"] });
     },
   });
 }

@@ -8,6 +8,7 @@ import { useCheckInDuty, useCheckOutDuty, useCurrentDutyPeriod } from "../../tra
 import { useLocationSharing } from "../../tracking/useLocationSharing";
 import { useVisits } from "../api";
 import { todayIso } from "../../../lib/dates";
+import { formatTime, getTenantPreferences } from "../../../lib/preferences";
 
 const STATUS_TONE: Record<VisitStatus, "success" | "warning" | "neutral" | "danger" | "info"> = {
   scheduled: "info",
@@ -17,8 +18,8 @@ const STATUS_TONE: Record<VisitStatus, "success" | "warning" | "neutral" | "dang
   cancelled: "neutral",
 };
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function timeOf(iso: string) {
+  return formatTime(iso);
 }
 
 export function MyDayPage() {
@@ -92,7 +93,7 @@ export function MyDayPage() {
       <div className="mb-4">
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">My Day</h1>
         <p className="mt-1 text-sm text-inksoft">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          {new Intl.DateTimeFormat(getTenantPreferences().locale, { weekday: "long", month: "long", day: "numeric", timeZone: getTenantPreferences().timezone }).format(new Date())}
         </p>
       </div>
 
@@ -105,7 +106,7 @@ export function MyDayPage() {
           <>
             <div className="flex items-center gap-2 text-sm font-semibold text-lime">
               <span className="h-2 w-2 rounded-full bg-lime" />
-              On duty since {formatTime(dutyPeriod.started_at)}
+              On duty since {timeOf(dutyPeriod.started_at)}
             </div>
             <p className="mt-1 text-xs text-inksoft">
               Your location is being shared so your visits can be tracked in real time.

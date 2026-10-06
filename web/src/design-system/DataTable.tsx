@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 
 export interface Column<T> {
@@ -14,6 +14,10 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string | number;
   isLoading?: boolean;
   emptyMessage?: string;
+  /** Makes each row clickable (and focusable — Enter/Space open it too). */
+  onRowClick?: (row: T) => void;
+  /** Accessible name for a clickable row, e.g. "View details of …". */
+  rowLabel?: (row: T) => string;
 }
 
 export function DataTable<T>({
@@ -22,6 +26,8 @@ export function DataTable<T>({
   rowKey,
   isLoading,
   emptyMessage = "No records found.",
+  onRowClick,
+  rowLabel,
 }: DataTableProps<T>) {
   // Defensive against a backend response that omits an expected relation
   // (e.g. Laravel's whenLoaded() silently drops the key when a controller
@@ -60,7 +66,24 @@ export function DataTable<T>({
                 </tr>
               ))
             : safeRows.map((row) => (
-                <tr key={rowKey(row)} className="transition-colors duration-150 hover:bg-paper">
+                <tr
+                  key={rowKey(row)}
+                  className={`transition-colors duration-150 hover:bg-paper ${onRowClick ? "cursor-pointer focus-visible:bg-tealtint focus-visible:outline-none" : ""}`}
+                  {...(onRowClick
+                    ? {
+                        tabIndex: 0,
+                        role: "button",
+                        "aria-label": rowLabel?.(row),
+                        onClick: () => onRowClick(row),
+                        onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onRowClick(row);
+                          }
+                        },
+                      }
+                    : {})}
+                >
                   {columns.map((col) => (
                     <td key={col.key} className={`px-4 py-3 text-sm text-ink ${col.className ?? ""}`}>
                       {col.render(row)}

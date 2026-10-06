@@ -26,6 +26,7 @@ import { useStaff } from "../../staff/api";
 import { deliversVisits, ROSTERING_ROLES } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
 import { todayIso } from "../../../lib/dates";
+import { tenantSettings } from "../../../lib/preferences";
 
 const STATUS_TONE: Record<VisitStatus, "success" | "warning" | "neutral" | "danger" | "info"> = {
   scheduled: "info",
@@ -286,6 +287,7 @@ export function VisitsPage() {
           <FormField label="Care tasks" htmlFor="visit-tasks">
             <TagInput
               id="visit-tasks"
+              suggestions={tenantSettings().reference_data.care_tasks}
               value={form.care_tasks ?? []}
               onChange={(care_tasks) => setForm({ ...form, care_tasks })}
               placeholder="e.g. Morning wash"
@@ -294,6 +296,7 @@ export function VisitsPage() {
           <FormField label="Required skills" htmlFor="visit-skills">
             <TagInput
               id="visit-skills"
+              suggestions={tenantSettings().reference_data.skills}
               value={form.required_skills ?? []}
               onChange={(required_skills) => setForm({ ...form, required_skills })}
               placeholder="e.g. manual_handling"

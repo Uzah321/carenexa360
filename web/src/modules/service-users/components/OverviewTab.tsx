@@ -32,6 +32,7 @@ import {
 } from "../api";
 import { SERVICE_USER_CONTACT_TYPES, type ServiceUser, type ServiceUserContact } from "../../../lib/types";
 import { useStaff } from "../../staff/api";
+import { CarePathwayCard } from "./CarePathwayCard";
 
 const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
 
@@ -123,6 +124,8 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
       <PersonalDetailsCard serviceUser={serviceUser} />
 
       <CareTeamCard serviceUser={serviceUser} />
+
+      <CarePathwayCard serviceUserId={serviceUser.id} />
 
       <MedicalSummaryCard serviceUser={serviceUser} />
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\CarePlanning\Http\Requests\StoreCarePlanRequest;
 use App\Modules\CarePlanning\Http\Resources\CarePlanResource;
 use App\Modules\CarePlanning\Models\CarePlan;
+use App\Modules\CarePlanning\Support\CarePathway;
 use App\Modules\CarePlanning\Support\HomeCarePlan;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Notifications\AssignmentMessages;
@@ -114,6 +115,17 @@ class CarePlanController extends Controller
                 ($newRisks[$userId] ?? collect())->all(),
             ));
         }
+    }
+
+    /** Where the client is on the care pathway (System Settings → Care Pathway). */
+    public function pathway(Request $request, ServiceUser $serviceUser)
+    {
+        abort_unless(
+            $request->user()->isPlatformAdmin() || $request->user()->tenant_id === $serviceUser->tenant_id,
+            403
+        );
+
+        return response()->json(['data' => CarePathway::for($serviceUser)]);
     }
 
     public function show(Request $request, CarePlan $carePlan)

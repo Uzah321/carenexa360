@@ -2,6 +2,7 @@
 
 namespace App\Modules\Organization\Http\Resources;
 
+use App\Modules\Organization\Support\TenantSettings;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,7 +20,8 @@ class TenantResource extends JsonResource
             'locale' => $this->locale,
             'plan' => $this->plan,
             'status' => $this->status,
-            'settings' => $this->settings ?? [],
+            // Saved values over defaults — what the app actually uses.
+            'settings' => TenantSettings::effective($this->settings),
             'created_at' => $this->created_at,
         ];
     }

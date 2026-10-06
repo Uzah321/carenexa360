@@ -14,6 +14,7 @@ use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Modules\Staff\Models\StaffProfile;
 use App\Modules\Training\Models\TrainingRecord;
 use App\Modules\Visits\Models\Visit;
+use App\Support\Time\TenantClock;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -63,8 +64,9 @@ class OperationsDashboardController extends Controller
 
     protected function headline(): array
     {
-        $monthStart = now()->startOfMonth()->toDateString();
-        $today = now()->toDateString();
+        $tenantId = auth()->user()?->tenant_id;
+        $monthStart = TenantClock::now($tenantId)->startOfMonth()->toDateString();
+        $today = TenantClock::today($tenantId);
 
         $revenueThisMonth = Invoice::whereIn('status', self::BILLED_STATUSES)
             ->whereBetween('issue_date', [$monthStart, $today])
@@ -98,8 +100,9 @@ class OperationsDashboardController extends Controller
 
     protected function branchComparison(): array
     {
-        $monthStart = now()->startOfMonth()->toDateString();
-        $today = now()->toDateString();
+        $tenantId = auth()->user()?->tenant_id;
+        $monthStart = TenantClock::now($tenantId)->startOfMonth()->toDateString();
+        $today = TenantClock::today($tenantId);
 
         return Branch::all()->map(fn (Branch $branch) => [
             'id' => $branch->id,

@@ -3,6 +3,7 @@
 namespace App\Modules\Organization\Http\Requests;
 
 use App\Modules\Organization\Models\Tenant;
+use App\Modules\Organization\Support\TenantSettings;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateTenantRequest extends FormRequest
@@ -29,13 +30,12 @@ class UpdateTenantRequest extends FormRequest
             // action, not this general-purpose update).
             'name' => ['sometimes', 'string', 'max:255'],
             'country' => ['sometimes', 'string', 'max:255'],
-            'timezone' => ['sometimes', 'string', 'max:255'],
-            'currency' => ['sometimes', 'string', 'max:10'],
-            'locale' => ['sometimes', 'string', 'max:10'],
-            'settings' => ['sometimes', 'array'],
-            'settings.geofence_radius_meters' => ['sometimes', 'integer', 'min:10', 'max:2000'],
-            'settings.training_expiry_warning_days' => ['sometimes', 'integer', 'min:1', 'max:180'],
-            'settings.session_timeout_minutes' => ['sometimes', 'nullable', 'integer', 'min:5', 'max:1440'],
+            // Used for every "today" and local-time calculation — an
+            // unrecognised zone would break them all, so it must be a real one.
+            'timezone' => ['sometimes', 'string', 'timezone:all'],
+            'currency' => ['sometimes', 'string', 'size:3', 'alpha'],
+            'locale' => ['sometimes', 'string', 'regex:/^[a-z]{2,3}(-[A-Z]{2})?$/'],
+            ...TenantSettings::rules(),
         ];
     }
 }

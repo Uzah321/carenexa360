@@ -23,6 +23,7 @@ import { ROSTERING_ROLES } from "../../../lib/types";
 import type { Visit, VisitStatus } from "../../../lib/types";
 import { useClientSnapshot, useToday } from "../api";
 import { todayIso } from "../../../lib/dates";
+import { getTenantPreferences } from "../../../lib/preferences";
 
 type DisplayStatus = "due" | "in_progress" | "late" | "done" | "missed" | "cancelled";
 
@@ -237,7 +238,7 @@ export function TodayPage() {
     }
   }
 
-  const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+  const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString(getTenantPreferences().locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
