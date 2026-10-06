@@ -21,6 +21,10 @@ class UpdateMedicationRequest extends FormRequest
             'frequency' => ['sometimes', 'string', 'max:255'],
             'schedule' => ['nullable', 'array'],
             'schedule.*' => ['string', 'date_format:H:i'],
+            // Leave stock_on_hand empty to not track stock for this medication.
+            'stock_on_hand' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+            'reorder_level' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+            'units_per_dose' => ['sometimes', 'numeric', 'min:0.01', 'max:1000'],
             'end_date' => ['nullable', 'date'],
             'instructions' => ['nullable', 'string'],
             'status' => ['sometimes', 'string', Rule::in(Medication::STATUSES)],

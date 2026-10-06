@@ -39,6 +39,7 @@ class StoreObservationRequest extends FormRequest
             'value.pulse' => [Rule::requiredIf($isNews2Set), 'numeric', 'between:0,300'],
             'value.consciousness' => [Rule::requiredIf($isNews2Set), 'string', Rule::in(News2::CONSCIOUSNESS_LEVELS)],
             'value.temperature' => [Rule::requiredIf($isNews2Set), 'numeric', 'between:25,45'],
+            ...($this->input('type') === 'wound' ? Observation::woundRules('required') : []),
             'unit' => ['nullable', 'string', 'max:50'],
             'recorded_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],

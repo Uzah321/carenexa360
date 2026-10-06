@@ -19,6 +19,8 @@ use App\Modules\Identity\Http\Controllers\AuthController;
 use App\Modules\Identity\Http\Controllers\TwoFactorController;
 use App\Modules\Identity\Http\Controllers\UserRoleController;
 use App\Modules\Incidents\Http\Controllers\IncidentController;
+use App\Modules\Quality\Http\Controllers\ComplaintController;
+use App\Modules\Quality\Http\Controllers\SpotCheckController;
 use App\Modules\Marketing\Http\Controllers\DemoRequestController;
 use App\Modules\Medications\Http\Controllers\MedicationAdministrationController;
 use App\Modules\Medications\Http\Controllers\MedicationController;
@@ -153,6 +155,20 @@ Route::prefix('v1')->group(function () {
                 Route::get('/{incident}', [IncidentController::class, 'show']);
                 Route::patch('/{incident}', [IncidentController::class, 'update']);
                 Route::patch('/{incident}/archive', [IncidentController::class, 'archive']);
+            });
+
+            Route::prefix('complaints')->group(function () {
+                Route::get('/', [ComplaintController::class, 'index']);
+                Route::post('/', [ComplaintController::class, 'store']);
+                Route::get('/{complaint}', [ComplaintController::class, 'show']);
+                Route::patch('/{complaint}', [ComplaintController::class, 'update']);
+            });
+
+            Route::prefix('spot-checks')->group(function () {
+                Route::get('/', [SpotCheckController::class, 'index']);
+                Route::post('/', [SpotCheckController::class, 'store']);
+                Route::get('/{spotCheck}', [SpotCheckController::class, 'show']);
+                Route::patch('/{spotCheck}', [SpotCheckController::class, 'update']);
             });
 
             Route::prefix('safeguarding-cases')->group(function () {

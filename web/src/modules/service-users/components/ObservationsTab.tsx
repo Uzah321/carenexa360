@@ -27,6 +27,7 @@ import {
 } from "../../observations/api";
 import { ObservationTrendChart } from "../../observations/components/ObservationTrendChart";
 import { News2Badge, News2Summary, ObservationValueFields } from "../../observations/components/News2Fields";
+import { WOUND_STAGE_LABELS } from "../../observations/wound";
 import { DEFAULT_UNITS, draftToValue, valueToDraft, type ObservationDraft } from "../../observations/observationDraft";
 import { assessNews2 } from "../../observations/news2";
 import { rangeScores } from "../../observations/rangeScores";
@@ -41,6 +42,11 @@ function readingText(observation: Observation): string {
   if (observation.type === "blood_pressure") return `${v.systolic}/${v.diastolic} mmHg`;
   if (observation.type === "news2") {
     return `RR ${v.respiration_rate} · SpO₂ ${v.spo2}%${v.on_oxygen ? " (O₂)" : ""} · BP ${v.systolic} · P ${v.pulse} · T ${v.temperature}°C`;
+  }
+  if (observation.type === "wound") {
+    const size = v.length_cm && v.width_cm ? ` · ${v.length_cm}×${v.width_cm}${v.depth_cm ? `×${v.depth_cm}` : ""} cm` : "";
+    const stage = v.stage ? ` · ${WOUND_STAGE_LABELS[String(v.stage)] ?? v.stage}` : "";
+    return `${v.site}${size}${stage}`;
   }
   const oxygen = observation.type === "oxygen_saturation" && v.on_oxygen === true ? " on O₂" : "";
   return `${v.value}${observation.unit ? ` ${observation.unit}` : ""}${oxygen}`;

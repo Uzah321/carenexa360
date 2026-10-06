@@ -26,6 +26,10 @@ class StoreMedicationRequest extends FormRequest
             'frequency' => ['required', 'string', 'max:255'],
             'schedule' => ['nullable', 'array'],
             'schedule.*' => ['string', 'date_format:H:i'],
+            // Leave stock_on_hand empty to not track stock for this medication.
+            'stock_on_hand' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+            'reorder_level' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+            'units_per_dose' => ['sometimes', 'numeric', 'min:0.01', 'max:1000'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'prescriber' => ['nullable', 'string', 'max:255'],

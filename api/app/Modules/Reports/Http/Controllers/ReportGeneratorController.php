@@ -20,6 +20,7 @@ use App\Modules\Observations\Support\RangeScores;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Tenant;
 use App\Modules\Payroll\Models\Payslip;
+use App\Modules\Reports\Support\OperationalReports;
 use App\Modules\Reports\Support\ReportRoles;
 use App\Modules\Rostering\Models\Shift;
 use App\Modules\Safeguarding\Models\SafeguardingCase;
@@ -81,7 +82,43 @@ class ReportGeneratorController extends Controller
 
     private function dispatch(string $key, array $filters): array
     {
+        $ops = new OperationalReports($filters);
+
         return match ($key) {
+            // Client history, care delivery, workforce, rostering, travel and
+            // finance reports live in OperationalReports.
+            'care_history' => $ops->careHistory(),
+            'review_history' => $ops->reviewHistory(),
+            'daily_notes' => $ops->dailyNotes(),
+            'family_contact_activity' => $ops->familyContactActivity(),
+            'admission_discharge_history' => $ops->admissionsAndDischarges(),
+            'new_admissions' => $ops->admissionsAndDischarges(admissionsOnly: true),
+            'care_tasks' => $ops->careTasks(),
+            'care_package_utilization' => $ops->carePackageUtilization(),
+            'staff_attendance' => $ops->staffAttendance(),
+            'clock_in_out' => $ops->clockInOut(),
+            'overtime' => $ops->overtime(),
+            'sickness' => $ops->sickness(),
+            'unfilled_shifts' => $ops->unfilledShifts(),
+            'staff_utilization' => $ops->staffUtilization(),
+            'mileage_travel_time' => $ops->travelByDay('Mileage & Travel Time'),
+            'travel_distance' => $ops->travelByDay('Travel Distance'),
+            'mileage' => $ops->mileage(withReimbursement: false),
+            'mileage_reimbursement' => $ops->mileage(withReimbursement: true),
+            'assigned_vs_available' => $ops->staffingByDay('available'),
+            'staffing_gaps' => $ops->staffingByDay('gaps'),
+            'staff_shortages' => $ops->staffingByDay('shortages'),
+            'overtime_risk' => $ops->overtimeRisk(),
+            'client_carer_allocation' => $ops->clientCarerAllocation(),
+            'background_checks' => $ops->backgroundChecks(),
+            'funding_utilization' => $ops->fundingUtilization(),
+            'profit_margin' => $ops->profitMargin(),
+            'medication_stock' => $ops->medicationStock(),
+            'wound_progress' => $ops->woundProgress(),
+            'complaints' => $ops->complaints(),
+            'spot_checks' => $ops->spotChecks(),
+            'service_quality_indicators' => $ops->serviceQualityIndicators(),
+
             // Client / Service User
             'visit_history' => $this->visitList($filters, null, 'Visit History'),
             'missed_visits' => $this->visitList($filters, 'missed', 'Missed Visits'),

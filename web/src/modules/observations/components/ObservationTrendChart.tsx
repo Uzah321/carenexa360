@@ -31,7 +31,14 @@ function extractSeries(observations: Observation[], type: ObservationType): Poin
       recordedAt: o.recorded_at,
       // A NEWS2 set has no single "value" — its trend is the aggregate score.
       primary:
-        type === "blood_pressure" ? Number(o.value.systolic) : type === "news2" ? Number(o.news2?.total) : Number(o.value.value),
+        type === "blood_pressure"
+          ? Number(o.value.systolic)
+          : type === "news2"
+            ? Number(o.news2?.total)
+            : // A wound trends by its surface area (length × width).
+              type === "wound"
+              ? Number(o.value.length_cm) * Number(o.value.width_cm)
+              : Number(o.value.value),
       secondary: type === "blood_pressure" ? Number(o.value.diastolic) : undefined,
       alertSeverity: o.alerts?.[0]?.severity,
     }))

@@ -1,6 +1,7 @@
 import { Checkbox, FormField, Input, Select, StatusBadge } from "../../../design-system";
 import type { News2Assessment, News2Parameter, ObservationType } from "../../../lib/types";
 import { DEFAULT_UNITS, type ObservationDraft } from "../observationDraft";
+import { WOUND_APPEARANCE_LABELS, WOUND_EXUDATE_LABELS, WOUND_STAGE_LABELS } from "../wound";
 import {
   CONSCIOUSNESS_LABELS,
   CONSCIOUSNESS_LEVELS,
@@ -86,6 +87,58 @@ export function ObservationValueFields({
             checked={draft.on_oxygen === true}
             onChange={(e) => onChange({ on_oxygen: e.target.checked })}
           />
+        </div>
+      </>
+    );
+  }
+
+  if (type === "wound") {
+    const optionalNumber = (key: string, label: string) => (
+      <FormField label={label} htmlFor={`${idPrefix}-${key}`}>
+        <Input
+          id={`${idPrefix}-${key}`}
+          type="number"
+          step="0.1"
+          min={0}
+          inputMode="decimal"
+          value={String(draft[key] ?? "")}
+          onChange={(e) => onChange({ [key]: e.target.value })}
+        />
+      </FormField>
+    );
+    const choice = (key: string, label: string, options: Record<string, string>) => (
+      <FormField label={label} htmlFor={`${idPrefix}-${key}`}>
+        <Select id={`${idPrefix}-${key}`} value={String(draft[key] ?? "")} onChange={(e) => onChange({ [key]: e.target.value })}>
+          <option value="">Not recorded</option>
+          {Object.entries(options).map(([value, text]) => (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+    );
+
+    return (
+      <>
+        <FormField label="Wound site" htmlFor={`${idPrefix}-site`}>
+          <Input
+            id={`${idPrefix}-site`}
+            required
+            placeholder="e.g. Left heel"
+            value={String(draft.site ?? "")}
+            onChange={(e) => onChange({ site: e.target.value })}
+          />
+        </FormField>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {optionalNumber("length_cm", "Length (cm)")}
+          {optionalNumber("width_cm", "Width (cm)")}
+          {optionalNumber("depth_cm", "Depth (cm)")}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {choice("stage", "Pressure ulcer stage", WOUND_STAGE_LABELS)}
+          {choice("appearance", "Wound bed", WOUND_APPEARANCE_LABELS)}
+          {choice("exudate", "Exudate", WOUND_EXUDATE_LABELS)}
         </div>
       </>
     );

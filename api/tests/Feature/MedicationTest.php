@@ -240,4 +240,60 @@ class MedicationTest extends TestCase
             ->assertJsonCount(1, 'data.0.today_administrations')
             ->assertJsonPath('data.0.today_administrations.0.scheduled_time', '08:00');
     }
+
+    public function test_giving_a_dose_takes_it_off_tracked_stock_but_not_below_zero(): void
+    {
+        ['admin' => $admin, 'serviceUser' => $serviceUser] = $this->makeTenantWithServiceUser();
+        $medication = $this->makeParacetamol($serviceUser, ['stock_on_hand' => 5, 'units_per_dose' => 2, 'reorder_level' => 4]);
+        $untracked = $this->makeParacetamol($serviceUser, ['name' => 'Aspirin']);
+
+        $give = fn (Medication $m, string $status = 'administered', array $extra = []) => $this->actingAs($admin)
+            ->postJson("/api/v1/medications/{$m->id}/administrations", ['status' => $status, ...$extra])->assertCreated();
+
+        $give($medication);
+        $this->assertEquals(3, $medication->fresh()->stock_on_hand);
+        $this->assertTrue($medication->fresh()->needsReorder());
+
+        // Not given: stock untouched.
+        $give($medication, 'not_given', ['not_given_reason' => 'refused']);
+        $this->assertEquals(3, $medication->fresh()->stock_on_hand);
+
+        $give($medication);
+        $give($medication);
+        $this->assertEquals(0, $medication->fresh()->stock_on_hand);
+
+        $give($untracked);
+        $this->assertNull($untracked->fresh()->stock_on_hand);
+
+        $this->actingAs($admin)->getJson("/api/v1/service-users/{$serviceUser->id}/medications")
+            ->assertOk()
+            ->assertJsonPath('data.1.needs_reorder', true);
+    }
+
+    public function test_days_of_stock_left_uses_the_schedule(): void
+    {
+        ['serviceUser' => $serviceUser] = $this->makeTenantWithServiceUser();
+        // Four doses a day, two tablets each = 8 a day; 40 tablets = 5 days.
+        $medication = $this->makeParacetamol($serviceUser, ['stock_on_hand' => 40, 'units_per_dose' => 2]);
+
+        $this->assertSame(5.0, $medication->daysOfStockLeft());
+        $this->assertTrue($medication->needsReorder());
+
+        $medication->update(['stock_on_hand' => 200]);
+        $this->assertFalse($medication->fresh()->needsReorder());
+    }
+
+    public function test_stock_can_be_set_when_editing_a_medication(): void
+    {
+        ['admin' => $admin, 'serviceUser' => $serviceUser] = $this->makeTenantWithServiceUser();
+        $medication = $this->makeParacetamol($serviceUser);
+
+        $this->actingAs($admin)->patchJson("/api/v1/medications/{$medication->id}", ['stock_on_hand' => 56, 'reorder_level' => 14, 'units_per_dose' => 1])
+            ->assertOk()
+            ->assertJsonPath('data.stock_on_hand', 56)
+            ->assertJsonPath('data.days_of_stock_left', 14);
+
+        $this->actingAs($admin)->patchJson("/api/v1/medications/{$medication->id}", ['stock_on_hand' => -3])
+            ->assertUnprocessable()->assertJsonValidationErrors('stock_on_hand');
+    }
 }

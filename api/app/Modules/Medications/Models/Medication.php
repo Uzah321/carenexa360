@@ -35,6 +35,9 @@ class Medication extends Model
         'is_prn',
         'prn_instructions',
         'is_controlled_drug',
+        'stock_on_hand',
+        'reorder_level',
+        'units_per_dose',
         'status',
         'created_by',
         'archived_at',
@@ -48,6 +51,9 @@ class Medication extends Model
             'end_date' => 'date',
             'is_prn' => 'boolean',
             'is_controlled_drug' => 'boolean',
+            'stock_on_hand' => 'float',
+            'reorder_level' => 'float',
+            'units_per_dose' => 'float',
             'archived_at' => 'datetime',
         ];
     }
@@ -65,6 +71,40 @@ class Medication extends Model
     public function administrations(): HasMany
     {
         return $this->hasMany(MedicationAdministration::class);
+    }
+
+    /** Whether stock is being counted for this medication at all. */
+    public function tracksStock(): bool
+    {
+        return $this->stock_on_hand !== null;
+    }
+
+    /** Doses a day from the schedule; null for PRN or unscheduled medication. */
+    public function dosesPerDay(): ?int
+    {
+        return $this->is_prn || empty($this->schedule) ? null : count($this->schedule);
+    }
+
+    /** How many days the current stock lasts at the scheduled rate. */
+    public function daysOfStockLeft(): ?float
+    {
+        $perDay = $this->dosesPerDay();
+        if (! $this->tracksStock() || ! $perDay || ! $this->units_per_dose) {
+            return null;
+        }
+
+        return round($this->stock_on_hand / ($perDay * $this->units_per_dose), 1);
+    }
+
+    public function needsReorder(): bool
+    {
+        if (! $this->tracksStock()) {
+            return false;
+        }
+        $days = $this->daysOfStockLeft();
+
+        return ($this->reorder_level !== null && $this->stock_on_hand <= $this->reorder_level)
+            || ($days !== null && $days <= 7);
     }
 
     /** Today's records — what the day's medication round is checked against. */

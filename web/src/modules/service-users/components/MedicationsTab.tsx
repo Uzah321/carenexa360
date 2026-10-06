@@ -49,6 +49,64 @@ import {
 import { MedicationRound } from "../../medications/components/MedicationRound";
 import { ScheduleTimesInput } from "../../medications/components/ScheduleTimesInput";
 
+const toNumberOrNull = (value: string) => (value.trim() === "" ? null : Number(value));
+
+/** Stock on hand, reorder level and units per dose — shared by the add and edit forms. */
+function StockFields({
+  idPrefix,
+  stockOnHand,
+  reorderLevel,
+  unitsPerDose,
+  onChange,
+}: {
+  idPrefix: string;
+  stockOnHand: number | null | undefined;
+  reorderLevel: number | null | undefined;
+  unitsPerDose: number | undefined;
+  onChange: (patch: { stock_on_hand?: number | null; reorder_level?: number | null; units_per_dose?: number }) => void;
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <FormField label="Stock on hand" htmlFor={`${idPrefix}-stock`}>
+          <Input
+            id={`${idPrefix}-stock`}
+            type="number"
+            min={0}
+            step="any"
+            placeholder="Not tracked"
+            value={stockOnHand ?? ""}
+            onChange={(e) => onChange({ stock_on_hand: toNumberOrNull(e.target.value) })}
+          />
+        </FormField>
+        <FormField label="Reorder at" htmlFor={`${idPrefix}-reorder`}>
+          <Input
+            id={`${idPrefix}-reorder`}
+            type="number"
+            min={0}
+            step="any"
+            value={reorderLevel ?? ""}
+            onChange={(e) => onChange({ reorder_level: toNumberOrNull(e.target.value) })}
+          />
+        </FormField>
+        <FormField label="Units per dose" htmlFor={`${idPrefix}-units`}>
+          <Input
+            id={`${idPrefix}-units`}
+            type="number"
+            min={0.01}
+            step="any"
+            value={unitsPerDose ?? 1}
+            onChange={(e) => onChange({ units_per_dose: Number(e.target.value) || 1 })}
+          />
+        </FormField>
+      </div>
+      <p className="-mt-2 mb-4 text-xs text-inksoft">
+        Leave stock empty to not track it. Each dose given takes the units per dose off the count.
+      </p>
+    </>
+  );
+}
+
 const OUTCOME_LABELS: Partial<Record<MedicationAdministrationStatus, string>> = {
   administered: "Given",
   prn: "Given (PRN)",
@@ -73,6 +131,9 @@ function toUpdateInput(medication: Medication): UpdateMedicationInput {
     end_date: medication.end_date ?? "",
     instructions: medication.instructions ?? "",
     status: medication.status,
+    stock_on_hand: medication.stock_on_hand,
+    reorder_level: medication.reorder_level,
+    units_per_dose: medication.units_per_dose,
   };
 }
 
@@ -195,6 +256,22 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
     { key: "dose", header: "Dose", render: (row) => row.dose },
     { key: "route", header: "Route", render: (row) => row.route },
     { key: "frequency", header: "Frequency", render: (row) => row.frequency },
+    {
+      key: "stock",
+      header: "Stock",
+      render: (row) =>
+        row.stock_on_hand === null ? (
+          <span className="text-inksoft">—</span>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span>
+              {row.stock_on_hand}
+              {row.days_of_stock_left !== null && <span className="text-xs text-inksoft"> · {row.days_of_stock_left}d</span>}
+            </span>
+            {row.needs_reorder && <StatusBadge label={row.stock_on_hand <= 0 ? "Out" : "Reorder"} tone="danger" />}
+          </div>
+        ),
+    },
     {
       key: "controlled",
       header: "",
@@ -342,6 +419,13 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
             />
           </FormField>
+          <StockFields
+            idPrefix="med"
+            stockOnHand={form.stock_on_hand}
+            reorderLevel={form.reorder_level}
+            unitsPerDose={form.units_per_dose}
+            onChange={(patch) => setForm({ ...form, ...patch })}
+          />
           <FormField label="Instructions" htmlFor="med-instructions">
             <Textarea
               id="med-instructions"
@@ -428,6 +512,13 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
               onChange={(e) => setEditDraft({ ...editDraft, end_date: e.target.value })}
             />
           </FormField>
+          <StockFields
+            idPrefix="edit-med"
+            stockOnHand={editDraft.stock_on_hand}
+            reorderLevel={editDraft.reorder_level}
+            unitsPerDose={editDraft.units_per_dose}
+            onChange={(patch) => setEditDraft({ ...editDraft, ...patch })}
+          />
           <FormField label="Instructions" htmlFor="edit-med-instructions">
             <Textarea
               id="edit-med-instructions"
@@ -509,6 +600,14 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
             <div className="flex justify-between border-b border-line py-2 text-sm">
               <dt className="text-inksoft">PRN</dt>
               <dd className="font-medium text-ink">{viewingMedication.is_prn ? "Yes" : "No"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2 text-sm">
+              <dt className="text-inksoft">Stock on hand</dt>
+              <dd className="font-medium text-ink">
+                {viewingMedication.stock_on_hand === null
+                  ? "Not tracked"
+                  : `${viewingMedication.stock_on_hand}${viewingMedication.days_of_stock_left !== null ? ` (${viewingMedication.days_of_stock_left} days)` : ""}${viewingMedication.needs_reorder ? " — reorder now" : ""}`}
+              </dd>
             </div>
             <div className="flex justify-between py-2 text-sm">
               <dt className="text-inksoft">Controlled drug</dt>

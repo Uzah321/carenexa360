@@ -612,6 +612,12 @@ export interface Medication {
   is_prn: boolean;
   prn_instructions: string | null;
   is_controlled_drug: boolean;
+  /** null = stock isn't tracked for this medication. */
+  stock_on_hand: number | null;
+  reorder_level: number | null;
+  units_per_dose: number;
+  days_of_stock_left: number | null;
+  needs_reorder: boolean;
   status: "active" | "discontinued";
   archived_at: string | null;
   created_by: number | null;
@@ -638,6 +644,7 @@ export const OBSERVATION_TYPES = [
   "sleep",
   "mood",
   "news2",
+  "wound",
 ] as const;
 export type ObservationType = (typeof OBSERVATION_TYPES)[number];
 
@@ -1104,4 +1111,94 @@ export interface ClientSnapshot {
   service_user: ServiceUser;
   care_plan_sections: ClientSnapshotCarePlanSection[];
   medications: ClientSnapshotMedication[];
+}
+
+// ---- Quality: complaints and spot checks ------------------------------------
+
+// Mirrors App\Modules\Quality\Support\QualityRoles::ALLOWED (UI gating only —
+// the API re-checks every request).
+export const QUALITY_ROLES = [
+  "Organization Owner",
+  "Organization Admin",
+  "Branch Manager",
+  "Care Manager",
+  "Care Coordinator",
+  "Compliance Officer",
+  "Auditor",
+] as const;
+
+export const COMPLAINT_CHANNELS = ["phone", "email", "letter", "in_person", "online", "other"] as const;
+export const COMPLAINT_CATEGORIES = [
+  "quality_of_care",
+  "staff_conduct",
+  "timekeeping",
+  "missed_visit",
+  "communication",
+  "medication",
+  "dignity_and_respect",
+  "billing",
+  "other",
+] as const;
+export const COMPLAINT_SEVERITIES = ["low", "medium", "high"] as const;
+export const COMPLAINT_STATUSES = ["received", "investigating", "resolved", "closed", "withdrawn"] as const;
+export const COMPLAINT_OUTCOMES = ["upheld", "partially_upheld", "not_upheld"] as const;
+
+export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number];
+
+export interface Complaint {
+  id: number;
+  service_user_id: number | null;
+  service_user_name?: string | null;
+  received_date: string;
+  complainant_name: string;
+  complainant_relationship: string | null;
+  channel: (typeof COMPLAINT_CHANNELS)[number];
+  category: (typeof COMPLAINT_CATEGORIES)[number];
+  severity: (typeof COMPLAINT_SEVERITIES)[number];
+  description: string;
+  status: ComplaintStatus;
+  assigned_to: number | null;
+  assigned_to_name?: string | null;
+  acknowledged_date: string | null;
+  response_due_date: string | null;
+  is_overdue: boolean;
+  outcome: (typeof COMPLAINT_OUTCOMES)[number] | null;
+  findings: string | null;
+  actions_taken: string | null;
+  resolved_date: string | null;
+  created_at: string;
+}
+
+export const SPOT_CHECK_AREAS = [
+  "punctuality",
+  "id_and_uniform",
+  "infection_control",
+  "dignity_and_privacy",
+  "care_delivery",
+  "moving_and_handling",
+  "medication",
+  "communication",
+  "record_keeping",
+  "safeguarding_awareness",
+] as const;
+export type SpotCheckArea = (typeof SPOT_CHECK_AREAS)[number];
+export type SpotCheckResult = "pass" | "fail" | "na";
+export type SpotCheckOutcome = "pass" | "needs_improvement" | "fail";
+
+export interface SpotCheck {
+  id: number;
+  staff_user_id: number;
+  staff_name?: string | null;
+  checked_by: number | null;
+  checked_by_name?: string | null;
+  service_user_id: number | null;
+  service_user_name?: string | null;
+  visit_id: number | null;
+  check_date: string;
+  results: Partial<Record<SpotCheckArea, SpotCheckResult>>;
+  outcome: SpotCheckOutcome;
+  notes: string | null;
+  actions_required: string | null;
+  follow_up_date: string | null;
+  created_at: string;
 }

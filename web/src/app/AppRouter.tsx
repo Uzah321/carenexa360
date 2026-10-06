@@ -17,6 +17,8 @@ import { VisitDetailPage } from "../modules/visits/pages/VisitDetailPage";
 import { RoutePage } from "../modules/visits/pages/RoutePage";
 import { RosteringPage } from "../modules/rostering/pages/RosteringPage";
 import { IncidentsPage } from "../modules/incidents/pages/IncidentsPage";
+import { ComplaintsPage } from "../modules/quality/pages/ComplaintsPage";
+import { SpotChecksPage } from "../modules/quality/pages/SpotChecksPage";
 import { SafeguardingPage } from "../modules/safeguarding/pages/SafeguardingPage";
 import { BillingPage } from "../modules/billing/pages/BillingPage";
 import { PayrollPage } from "../modules/payroll/pages/PayrollPage";
@@ -40,6 +42,7 @@ import {
   FINANCE_ROLES,
   PAYROLL_ROLES,
   PLATFORM_ADMIN_ROLES,
+  QUALITY_ROLES,
   REPORT_ROLES,
   ROSTERING_ROLES,
   SAFEGUARDING_ROLES,
@@ -161,6 +164,22 @@ function Routing() {
         element={
           <ProtectedRoute>
             <IncidentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/complaints"
+        element={
+          <ProtectedRoute roles={QUALITY_ROLES}>
+            <ComplaintsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/spot-checks"
+        element={
+          <ProtectedRoute roles={QUALITY_ROLES}>
+            <SpotChecksPage />
           </ProtectedRoute>
         }
       />

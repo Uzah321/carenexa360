@@ -6,6 +6,7 @@ use App\Modules\CarePlanning\Models\CarePlanRiskAssessment;
 use App\Modules\CarePlanning\Models\CarePlanSection;
 use App\Modules\Compliance\Models\ComplianceRequirement;
 use App\Modules\Incidents\Models\Incident;
+use App\Modules\Quality\Models\Complaint;
 use App\Modules\Rostering\Models\Shift;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 
@@ -44,6 +45,25 @@ class AssignmentMessages
         }
 
         return new AssignmentNotification('incident', 'Incident assigned to you', $lines, 'View Incidents', '/incidents');
+    }
+
+    public static function complaint(Complaint $complaint): AssignmentNotification
+    {
+        $complaint->loadMissing('serviceUser');
+        $lines = [
+            "You've been assigned a complaint to investigate.",
+            "From: {$complaint->complainant_name}".($complaint->complainant_relationship ? " ({$complaint->complainant_relationship})" : ''),
+            'Category: '.self::label($complaint->category),
+            'Severity: '.self::label($complaint->severity),
+        ];
+        if ($complaint->serviceUser) {
+            $lines[] = 'Client: '.self::name($complaint->serviceUser);
+        }
+        if ($complaint->response_due_date) {
+            $lines[] = 'Response due: '.$complaint->response_due_date->toDateString();
+        }
+
+        return new AssignmentNotification('complaint', 'Complaint assigned to you', $lines, 'View Complaints', '/complaints');
     }
 
     public static function complianceRequirement(ComplianceRequirement $requirement): AssignmentNotification

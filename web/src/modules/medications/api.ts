@@ -36,6 +36,9 @@ export interface CreateMedicationInput {
   is_prn?: boolean;
   prn_instructions?: string;
   is_controlled_drug?: boolean;
+  stock_on_hand?: number | null;
+  reorder_level?: number | null;
+  units_per_dose?: number;
 }
 
 export function useCreateMedication(serviceUserId: number) {
@@ -61,6 +64,9 @@ export interface UpdateMedicationInput {
   end_date?: string | null;
   instructions?: string | null;
   status?: "active" | "discontinued";
+  stock_on_hand?: number | null;
+  reorder_level?: number | null;
+  units_per_dose?: number;
 }
 
 export function useUpdateMedication(serviceUserId: number) {
