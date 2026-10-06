@@ -4,13 +4,19 @@ namespace App\Modules\Reports\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Billing\Models\Invoice;
+use App\Modules\CarePlanning\Models\CarePlan;
+use App\Modules\CarePlanning\Models\CarePlanRiskAssessment;
 use App\Modules\CarePlanning\Models\CarePlanSection;
+use App\Modules\CarePlanning\Support\HomeCarePlan;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Hr\Models\LeaveRequest;
 use App\Modules\Incidents\Models\Incident;
+use App\Modules\Medications\Models\Medication;
 use App\Modules\Medications\Models\MedicationAdministration;
 use App\Modules\Observations\Models\ClinicalAlert;
 use App\Modules\Observations\Models\Observation;
+use App\Modules\Observations\Support\News2;
+use App\Modules\Observations\Support\RangeScores;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Tenant;
 use App\Modules\Payroll\Models\Payslip;
@@ -81,6 +87,8 @@ class ReportGeneratorController extends Controller
             'missed_visits' => $this->visitList($filters, 'missed', 'Missed Visits'),
             'active_clients' => $this->clientsByStatus($filters, 'active', 'Active Clients'),
             'discharged_clients' => $this->clientsByStatus($filters, 'discharged', 'Discharged Clients'),
+            'client_profile_summary' => $this->clientProfileSummary($filters),
+            'care_plan_summary' => $this->carePlanSummary($filters),
 
             // Care Delivery
             'visit_status_breakdown' => $this->visitStatusBreakdown($filters),
@@ -93,6 +101,11 @@ class ReportGeneratorController extends Controller
             'missed_medication' => $this->medicationAdminList($filters, 'missed', 'Missed Medication'),
             'refused_medication' => $this->medicationAdminList($filters, 'refused', 'Refused Medication'),
             'prn_medication_usage' => $this->medicationAdminList($filters, 'prn', 'PRN Medication Usage'),
+            'medication_not_given' => $this->medicationNotGiven($filters),
+            'not_given_reasons' => $this->notGivenReasons($filters),
+            'unrecorded_doses' => $this->unrecordedDoses($filters),
+            'late_medication' => $this->lateMedication($filters),
+            'stock_checks' => $this->stockChecks($filters),
             'medication_errors' => $this->incidentList($filters, 'medication_error', 'Medication Errors'),
 
             // Clinical
@@ -104,6 +117,8 @@ class ReportGeneratorController extends Controller
             'pain_score_trends' => $this->observationTrend($filters, ['pain_score'], 'Pain Score Trends'),
             'hydration_trends' => $this->observationTrend($filters, ['fluid_intake', 'urine_output'], 'Nutrition & Hydration Trends'),
             'abnormal_observation_alerts' => $this->clinicalAlerts($filters),
+            'news2_scores' => $this->news2Scores($filters, false),
+            'news2_escalations' => $this->news2Scores($filters, true),
 
             // Incident & Safeguarding
             'falls' => $this->incidentList($filters, 'fall', 'Falls'),
@@ -141,6 +156,9 @@ class ReportGeneratorController extends Controller
 
             // Quality & Audit
             'care_plan_reviews_overdue' => $this->overdueReviews($filters),
+            'documentation_completeness' => $this->documentationCompleteness($filters),
+            'care_consent' => $this->careConsent($filters),
+            'risk_register' => $this->riskRegister($filters),
 
             // GPS / Visit Verification
             'trips_activity' => $this->tripsActivity($filters),
@@ -191,13 +209,50 @@ class ReportGeneratorController extends Controller
             'title' => $title,
             'columns' => [
                 ['key' => 'name', 'label' => 'Name'],
+                ['key' => 'date_of_birth', 'label' => 'Date of Birth'],
+                ['key' => 'nhs_number', 'label' => 'NHS Number'],
                 ['key' => 'funding_source', 'label' => 'Funding'],
                 ['key' => 'address', 'label' => 'Address'],
             ],
             'rows' => $clients->map(fn (ServiceUser $su) => [
                 'name' => $this->clientName($su),
+                'date_of_birth' => $su->date_of_birth?->toDateString() ?? '—',
+                'nhs_number' => $su->nhs_number ?? '—',
                 'funding_source' => $su->funding_source ?? '—',
                 'address' => $su->address ?? '—',
+            ]),
+        ];
+    }
+
+    /** Every client in scope, whatever their status — a register-style overview. */
+    private function clientProfileSummary(array $filters): array
+    {
+        $clients = $this->scopeByBranch(ServiceUser::query(), $filters['branch_id'], 'branch')
+            ->with(['carePlans' => fn ($q) => $q->where('status', 'active')])
+            ->orderBy('first_name')
+            ->get();
+
+        return [
+            'title' => 'Client Profile Summary',
+            'columns' => [
+                ['key' => 'name', 'label' => 'Name'],
+                ['key' => 'date_of_birth', 'label' => 'Date of Birth'],
+                ['key' => 'nhs_number', 'label' => 'NHS Number'],
+                ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'funding_source', 'label' => 'Funding'],
+                ['key' => 'allergies', 'label' => 'Allergies'],
+                ['key' => 'diagnoses', 'label' => 'Diagnoses'],
+                ['key' => 'care_plan', 'label' => 'Care Plan'],
+            ],
+            'rows' => $clients->map(fn (ServiceUser $su) => [
+                'name' => $this->clientName($su),
+                'date_of_birth' => $su->date_of_birth?->toDateString() ?? '—',
+                'nhs_number' => $su->nhs_number ?? '—',
+                'status' => $su->status,
+                'funding_source' => $su->funding_source ?? '—',
+                'allergies' => implode(', ', $su->allergies ?? []) ?: 'None recorded',
+                'diagnoses' => implode(', ', $su->diagnoses ?? []) ?: '—',
+                'care_plan' => ($plan = $su->carePlans->first()) ? "Version {$plan->version}" : 'None',
             ]),
         ];
     }
@@ -328,19 +383,49 @@ class ReportGeneratorController extends Controller
 
     // ---- Medications ------------------------------------------------------
 
-    private function medicationAdminList(array $filters, ?string $status, string $title): array
+    /**
+     * Older records carried the reason in the status itself, from before
+     * "not given" took a reason — map them onto the same reasons so reports
+     * count them together.
+     */
+    private const LEGACY_NOT_GIVEN_STATUSES = [
+        'refused' => 'refused',
+        'not_available' => 'medication_not_available',
+        'hospitalized' => 'hospitalised',
+        'self_administered' => 'self_administered',
+    ];
+
+    /** How far either side of its due time a dose can be given and still count as on time. */
+    private const MEDICATION_WINDOW_MINUTES = 60;
+
+    private function medicationAdministrationsInRange(array $filters)
     {
-        $administrations = MedicationAdministration::whereRaw(
+        return MedicationAdministration::whereRaw(
             'COALESCE(administered_at, created_at) BETWEEN ? AND ?',
             ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"]
         )
-            // A "not given" record with the same reason counts too, e.g. refused.
-            ->when($status, fn ($q) => $q->where(fn ($q) => $q->where('status', $status)
-                ->orWhere(fn ($q) => $q->where('status', 'not_given')->where('not_given_reason', $status))))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas(
                 'medication.serviceUser',
                 fn ($su) => $su->where('branch_id', $filters['branch_id'])
-            ))
+            ));
+    }
+
+    private function notGivenReason(MedicationAdministration $m): ?string
+    {
+        return $m->not_given_reason ?? self::LEGACY_NOT_GIVEN_STATUSES[$m->status] ?? null;
+    }
+
+    private function label(?string $value): string
+    {
+        return $value ? ucfirst(str_replace('_', ' ', $value)) : '—';
+    }
+
+    private function medicationAdminList(array $filters, ?string $status, string $title): array
+    {
+        $administrations = $this->medicationAdministrationsInRange($filters)
+            // A "not given" record with the same reason counts too, e.g. refused.
+            ->when($status, fn ($q) => $q->where(fn ($q) => $q->where('status', $status)
+                ->orWhere(fn ($q) => $q->where('status', 'not_given')->where('not_given_reason', $status))))
             ->with(['medication.serviceUser', 'administeredBy'])
             ->orderByDesc('administered_at')
             ->get();
@@ -351,22 +436,298 @@ class ReportGeneratorController extends Controller
                 ['key' => 'when', 'label' => 'Date/Time'],
                 ['key' => 'client', 'label' => 'Client'],
                 ['key' => 'medication', 'label' => 'Medication'],
+                ['key' => 'due', 'label' => 'Dose Due'],
                 ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'reason', 'label' => 'Reason Not Given'],
+                ['key' => 'stock_checked', 'label' => 'Stock Checked'],
                 ['key' => 'administered_by', 'label' => 'Administered By'],
             ],
             'rows' => $administrations->map(fn (MedicationAdministration $m) => [
                 'when' => ($m->administered_at ?? $m->created_at)->format('Y-m-d H:i'),
                 'client' => $this->clientName($m->medication?->serviceUser),
                 'medication' => $m->medication?->name ?? '—',
+                'due' => $m->scheduled_time ?? '—',
                 'status' => str_replace('_', ' ', $m->status),
                 'reason' => $m->not_given_reason ? str_replace('_', ' ', $m->not_given_reason) : '—',
+                'stock_checked' => $m->stock_checked === null ? '—' : ($m->stock_checked ? 'Yes' : 'No'),
                 'administered_by' => $m->administeredBy->name ?? '—',
             ]),
         ];
     }
 
+    /** Every dose recorded as not given, with its reason — including older statuses that carried one. */
+    private function medicationNotGiven(array $filters): array
+    {
+        $administrations = $this->medicationAdministrationsInRange($filters)
+            ->whereIn('status', ['not_given', ...array_keys(self::LEGACY_NOT_GIVEN_STATUSES)])
+            ->with(['medication.serviceUser', 'administeredBy'])
+            ->orderByDesc('administered_at')
+            ->get();
+
+        return [
+            'title' => 'Medication Not Given',
+            'columns' => [
+                ['key' => 'when', 'label' => 'Date/Time'],
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'medication', 'label' => 'Medication'],
+                ['key' => 'due', 'label' => 'Dose Due'],
+                ['key' => 'reason', 'label' => 'Reason'],
+                ['key' => 'recorded_by', 'label' => 'Recorded By'],
+                ['key' => 'notes', 'label' => 'Notes'],
+            ],
+            'rows' => $administrations->map(fn (MedicationAdministration $m) => [
+                'when' => ($m->administered_at ?? $m->created_at)->format('Y-m-d H:i'),
+                'client' => $this->clientName($m->medication?->serviceUser),
+                'medication' => $m->medication?->name ?? '—',
+                'due' => $m->scheduled_time ?? '—',
+                'reason' => $this->label($this->notGivenReason($m)),
+                'recorded_by' => $m->administeredBy->name ?? '—',
+                'notes' => $m->notes ?? '—',
+            ]),
+        ];
+    }
+
+    private function notGivenReasons(array $filters): array
+    {
+        $reasons = $this->medicationAdministrationsInRange($filters)
+            ->whereIn('status', ['not_given', ...array_keys(self::LEGACY_NOT_GIVEN_STATUSES)])
+            ->get()
+            ->map(fn (MedicationAdministration $m) => $this->notGivenReason($m))
+            ->filter();
+
+        $total = $reasons->count();
+        $counts = $reasons->countBy();
+
+        return [
+            'title' => 'Reasons Medication Not Given',
+            'columns' => [
+                ['key' => 'reason', 'label' => 'Reason'],
+                ['key' => 'count', 'label' => 'Doses'],
+                ['key' => 'percentage', 'label' => '% of Not Given'],
+            ],
+            'rows' => collect(MedicationAdministration::NOT_GIVEN_REASONS)->map(fn ($reason) => [
+                'reason' => $this->label($reason),
+                'count' => (int) ($counts[$reason] ?? 0),
+                'percentage' => $total > 0 ? round((($counts[$reason] ?? 0) / $total) * 100, 1).'%' : '0%',
+            ]),
+        ];
+    }
+
+    /**
+     * Scheduled doses whose time has passed with nothing recorded at all —
+     * the gaps on the MAR chart. Unlike "missed", which needs someone to
+     * have recorded the miss, these are the doses no one accounted for.
+     *
+     * Records made before doses had times (no scheduled_time) can't be tied
+     * to a slot, so each one covers one otherwise-unmatched dose that day
+     * rather than leaving the whole history looking unrecorded.
+     */
+    private function unrecordedDoses(array $filters): array
+    {
+        $from = Carbon::parse($filters['from'])->startOfDay();
+        $to = Carbon::parse($filters['to'])->endOfDay()->min(now());
+        $rows = collect();
+
+        if ($from->lte($to)) {
+            $medications = Medication::where('status', 'active')
+                ->whereNull('archived_at')
+                ->where('is_prn', false)
+                ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
+                ->with([
+                    'serviceUser',
+                    'administrations' => fn ($q) => $q->whereBetween('administered_at', [$from, $to]),
+                ])
+                ->get();
+
+            foreach ($medications as $medication) {
+                $schedule = $medication->schedule ?? [];
+                if ($schedule === []) {
+                    continue;
+                }
+
+                $timed = $medication->administrations->whereNotNull('scheduled_time');
+                $recorded = $timed
+                    ->map(fn (MedicationAdministration $a) => $a->administered_at->toDateString().' '.$a->scheduled_time)
+                    ->flip();
+                $untimedPerDay = $medication->administrations->whereNull('scheduled_time')
+                    ->countBy(fn (MedicationAdministration $a) => $a->administered_at->toDateString());
+
+                $day = $from->copy()->max($medication->start_date ?? $from)->startOfDay();
+                $lastDay = $medication->end_date ? $to->copy()->min($medication->end_date->copy()->endOfDay()) : $to;
+
+                for (; $day->lte($lastDay); $day->addDay()) {
+                    $untimed = $untimedPerDay[$day->toDateString()] ?? 0;
+                    foreach ($schedule as $time) {
+                        [$hour, $minute] = array_map('intval', explode(':', $time));
+                        $due = $day->copy()->setTime($hour, $minute);
+                        if ($due->gt($to) || $recorded->has($day->toDateString().' '.$time)) {
+                            continue;
+                        }
+                        if ($untimed > 0) {
+                            $untimed--;
+
+                            continue;
+                        }
+                        $rows->push([
+                            'due' => $due->format('Y-m-d H:i'),
+                            'client' => $this->clientName($medication->serviceUser),
+                            'medication' => trim("{$medication->name} {$medication->strength}"),
+                            'dose' => $medication->dose,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        return [
+            'title' => 'Unrecorded Doses',
+            'columns' => [
+                ['key' => 'due', 'label' => 'Dose Due'],
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'medication', 'label' => 'Medication'],
+                ['key' => 'dose', 'label' => 'Dose'],
+            ],
+            'rows' => $rows->sortBy('due')->values(),
+        ];
+    }
+
+    /** Doses given more than MEDICATION_WINDOW_MINUTES either side of their due time. */
+    private function lateMedication(array $filters): array
+    {
+        $rows = $this->medicationAdministrationsInRange($filters)
+            ->whereIn('status', ['administered', 'prn'])
+            ->whereNotNull('scheduled_time')
+            ->whereNotNull('administered_at')
+            ->with(['medication.serviceUser', 'administeredBy'])
+            ->orderBy('administered_at')
+            ->get()
+            ->map(function (MedicationAdministration $m) {
+                $given = $m->administered_at;
+                $diff = $this->timeToMinutes($given->format('H:i')) - $this->timeToMinutes($m->scheduled_time);
+
+                return ['m' => $m, 'diff' => $diff];
+            })
+            ->filter(fn ($r) => abs($r['diff']) > self::MEDICATION_WINDOW_MINUTES)
+            ->map(fn ($r) => [
+                'date' => $r['m']->administered_at->toDateString(),
+                'client' => $this->clientName($r['m']->medication?->serviceUser),
+                'medication' => $r['m']->medication?->name ?? '—',
+                'due' => $r['m']->scheduled_time,
+                'given' => $r['m']->administered_at->format('H:i'),
+                'timing' => ($r['diff'] > 0 ? 'Late by ' : 'Early by ').abs($r['diff']).' min',
+                'administered_by' => $r['m']->administeredBy->name ?? '—',
+            ])
+            ->values();
+
+        return [
+            'title' => 'Late Medication (more than '.self::MEDICATION_WINDOW_MINUTES.' minutes from due time)',
+            'columns' => [
+                ['key' => 'date', 'label' => 'Date'],
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'medication', 'label' => 'Medication'],
+                ['key' => 'due', 'label' => 'Due'],
+                ['key' => 'given', 'label' => 'Given'],
+                ['key' => 'timing', 'label' => 'Timing'],
+                ['key' => 'administered_by', 'label' => 'Administered By'],
+            ],
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * How often carers confirmed the stock when recording a dose. Records
+     * from before the stock check existed (null) are left out rather than
+     * counted as unchecked.
+     */
+    private function stockChecks(array $filters): array
+    {
+        $byMedication = $this->medicationAdministrationsInRange($filters)
+            ->whereNotNull('stock_checked')
+            ->with('medication.serviceUser')
+            ->get()
+            ->groupBy('medication_id');
+
+        return [
+            'title' => 'Medication Stock Checks',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'medication', 'label' => 'Medication'],
+                ['key' => 'recorded', 'label' => 'Doses Recorded'],
+                ['key' => 'checked', 'label' => 'Stock Checked'],
+                ['key' => 'percentage', 'label' => '% Checked'],
+            ],
+            'rows' => $byMedication->map(function ($records) {
+                $medication = $records->first()->medication;
+                $checked = $records->where('stock_checked', true)->count();
+
+                return [
+                    'client' => $this->clientName($medication?->serviceUser),
+                    'medication' => $medication?->name ?? '—',
+                    'recorded' => $records->count(),
+                    'checked' => $checked,
+                    'percentage' => round(($checked / $records->count()) * 100, 1).'%',
+                ];
+            })->sortBy('percentage', SORT_NATURAL)->values(),
+        ];
+    }
+
     // ---- Clinical / Observations ------------------------------------------
+
+    private const NEWS2_TYPES = ['news2', 'respiratory_rate', 'oxygen_saturation', 'blood_pressure', 'pulse', 'temperature'];
+
+    private const NEWS2_RISK_LABELS = [
+        'none' => 'None',
+        'low' => 'Low',
+        'low_medium' => 'Low-medium (red score)',
+        'medium' => 'Medium',
+        'high' => 'High',
+    ];
+
+    /**
+     * Each scored reading with its NEWS2 assessment. A full NEWS2 set gives
+     * the aggregate score; a single vital sign gives that parameter's score.
+     * Escalations keep only readings needing more than routine monitoring.
+     */
+    private function news2Scores(array $filters, bool $escalationsOnly): array
+    {
+        $observations = Observation::whereIn('type', self::NEWS2_TYPES)
+            ->whereBetween('recorded_at', ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"])
+            ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
+            ->with(['serviceUser', 'recordedBy'])
+            ->orderByDesc('recorded_at')
+            ->get();
+
+        $rows = $observations
+            ->map(fn (Observation $o) => ['o' => $o, 'a' => News2::assess($o->type, $o->value ?? [])])
+            ->filter(fn ($r) => $r['a'] !== null && (! $escalationsOnly || ! in_array($r['a']['risk'], ['none', 'low'], true)))
+            ->map(fn ($r) => [
+                'when' => $r['o']->recorded_at->format('Y-m-d H:i'),
+                'client' => $this->clientName($r['o']->serviceUser),
+                'type' => $r['o']->type === 'news2' ? 'Full NEWS2 set' : $this->label($r['o']->type),
+                'reading' => $this->formatObservationValue($r['o']),
+                'score' => $r['a']['total'],
+                'risk' => self::NEWS2_RISK_LABELS[$r['a']['risk']],
+                'response' => $r['a']['response'],
+                'recorded_by' => $r['o']->recordedBy->name ?? '—',
+            ])
+            ->values();
+
+        return [
+            'title' => $escalationsOnly ? 'NEWS2 Escalations' : 'NEWS2 Scores',
+            'columns' => [
+                ['key' => 'when', 'label' => 'Date/Time'],
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'type', 'label' => 'Reading'],
+                ['key' => 'reading', 'label' => 'Value'],
+                ['key' => 'score', 'label' => 'NEWS2 Score'],
+                ['key' => 'risk', 'label' => 'Clinical Risk'],
+                ['key' => 'response', 'label' => 'Response'],
+                ['key' => 'recorded_by', 'label' => 'Recorded By'],
+            ],
+            'rows' => $rows,
+        ];
+    }
+
 
     private function observationTrend(array $filters, array $types, string $title): array
     {
@@ -384,6 +745,7 @@ class ReportGeneratorController extends Controller
                 ['key' => 'client', 'label' => 'Client'],
                 ['key' => 'type', 'label' => 'Type'],
                 ['key' => 'value', 'label' => 'Value'],
+                ['key' => 'score', 'label' => 'Score (0–3)'],
                 ['key' => 'recorded_by', 'label' => 'Recorded By'],
             ],
             'rows' => $observations->map(fn (Observation $o) => [
@@ -391,14 +753,48 @@ class ReportGeneratorController extends Controller
                 'client' => $this->clientName($o->serviceUser),
                 'type' => str_replace('_', ' ', $o->type),
                 'value' => $this->formatObservationValue($o),
+                'score' => $this->highestParameterScore($o),
                 'recorded_by' => $o->recordedBy->name ?? '—',
             ]),
         ];
     }
 
+    /**
+     * The worst 0–3 score across a reading's parameters — NEWS2 for the vital
+     * signs it covers, RangeScores for diastolic BP and glucose — or "—" for
+     * types neither scores (weight, pain…).
+     */
+    private function highestParameterScore(Observation $observation): int|string
+    {
+        $value = $observation->value ?? [];
+        $scores = array_column([
+            ...array_values(News2::parameterScores($observation->type, $value)),
+            ...array_values(RangeScores::parameterScores($observation->type, $value)),
+        ], 'score');
+
+        return $scores === [] ? '—' : max($scores);
+    }
+
     private function formatObservationValue(Observation $observation): string
     {
         $value = $observation->value ?? [];
+
+        if ($observation->type === 'news2') {
+            return sprintf(
+                'RR %s · SpO₂ %s%% (%s) · BP %s · HR %s · %s · T %s°C',
+                $value['respiration_rate'] ?? '—',
+                $value['spo2'] ?? '—',
+                ! empty($value['on_oxygen']) ? 'oxygen' : 'air',
+                $value['systolic'] ?? '—',
+                $value['pulse'] ?? '—',
+                isset($value['consciousness']) ? strtoupper(substr((string) $value['consciousness'], 0, 1)) : '—',
+                $value['temperature'] ?? '—',
+            );
+        }
+
+        if (isset($value['reading']) && ! isset($value['value'])) {
+            return (string) $value['reading'];
+        }
 
         if ($observation->type === 'blood_pressure') {
             return isset($value['systolic'], $value['diastolic']) ? "{$value['systolic']}/{$value['diastolic']}" : '—';
@@ -988,26 +1384,216 @@ class ReportGeneratorController extends Controller
 
     private function overdueReviews(array $filters): array
     {
-        $sections = CarePlanSection::whereNotNull('review_date')
+        $overdue = fn ($query) => $query->whereNotNull('review_date')
             ->whereDate('review_date', '<', now())
             ->whereHas('carePlan', fn ($q) => $q->where('status', 'active'))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas('carePlan.serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
             ->with('carePlan.serviceUser')
-            ->orderBy('review_date')
             ->get();
+
+        $sections = $overdue(CarePlanSection::query())->map(fn (CarePlanSection $s) => [
+            'client' => $this->clientName($s->carePlan?->serviceUser),
+            'area' => str_replace('_', ' ', $s->area),
+            'review_date' => $s->review_date->toDateString(),
+        ]);
+        $risks = $overdue(CarePlanRiskAssessment::query())->map(fn (CarePlanRiskAssessment $ra) => [
+            'client' => $this->clientName($ra->carePlan?->serviceUser),
+            'area' => "Risk: {$ra->hazard}",
+            'review_date' => $ra->review_date->toDateString(),
+        ]);
 
         return [
             'title' => 'Care Plan Reviews Overdue',
             'columns' => [
                 ['key' => 'client', 'label' => 'Client'],
-                ['key' => 'area', 'label' => 'Care Area'],
+                ['key' => 'area', 'label' => 'Care Area / Risk'],
                 ['key' => 'review_date', 'label' => 'Review Was Due'],
             ],
-            'rows' => $sections->map(fn (CarePlanSection $s) => [
-                'client' => $this->clientName($s->carePlan?->serviceUser),
-                'area' => str_replace('_', ' ', $s->area),
-                'review_date' => $s->review_date->toDateString(),
-            ]),
+            'rows' => $sections->concat($risks)->sortBy('review_date')->values(),
+        ];
+    }
+
+    /** Active care plans in scope — the current position, not a date range. */
+    private function activeCarePlans(array $filters)
+    {
+        return CarePlan::where('status', 'active')
+            ->when($filters['branch_id'], fn ($q) => $q->whereHas('serviceUser', fn ($su) => $su->where('branch_id', $filters['branch_id'])))
+            ->with(['serviceUser', 'sections', 'riskAssessments.actionOwner'])
+            ->get()
+            ->sortBy(fn (CarePlan $p) => $this->clientName($p->serviceUser))
+            ->values();
+    }
+
+    private function riskRating(?int $score): string
+    {
+        return match (true) {
+            ! $score => 'Not scored',
+            $score <= 4 => "Low ({$score})",
+            $score <= 9 => "Medium ({$score})",
+            $score <= 16 => "High ({$score})",
+            default => "Very high ({$score})",
+        };
+    }
+
+    /** A risk's current score — residual once controls are scored, otherwise initial. */
+    private function currentRiskScore(CarePlanRiskAssessment $ra): ?int
+    {
+        return $ra->residualRiskScore() ?? $ra->riskScore();
+    }
+
+    private function carePlanSummary(array $filters): array
+    {
+        return [
+            'title' => 'Care Plan Summary',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'version', 'label' => 'Version'],
+                ['key' => 'effective_from', 'label' => 'Effective From'],
+                ['key' => 'sections', 'label' => 'Care Areas'],
+                ['key' => 'risks', 'label' => 'Risks'],
+                ['key' => 'high_risks', 'label' => 'High Risks'],
+                ['key' => 'home_care_plan', 'label' => 'Home Care Plan'],
+                ['key' => 'next_review', 'label' => 'Next Review'],
+            ],
+            'rows' => $this->activeCarePlans($filters)->map(function (CarePlan $plan) {
+                $reviews = $plan->sections->pluck('review_date')
+                    ->concat($plan->riskAssessments->pluck('review_date'))
+                    ->filter()
+                    ->sort();
+
+                return [
+                    'client' => $this->clientName($plan->serviceUser),
+                    'version' => $plan->version,
+                    'effective_from' => $plan->effective_from?->toDateString() ?? '—',
+                    'sections' => $plan->sections->count(),
+                    'risks' => $plan->riskAssessments->count(),
+                    'high_risks' => $plan->riskAssessments->filter(fn ($ra) => ($this->currentRiskScore($ra) ?? 0) >= 10)->count(),
+                    'home_care_plan' => HomeCarePlan::normalize($plan->home_care_plan) ? 'Yes' : 'Not started',
+                    'next_review' => $reviews->first()?->toDateString() ?? '—',
+                ];
+            }),
+        ];
+    }
+
+    /**
+     * How complete each active plan's Home Care Plan is: the narrative
+     * fields, needs per area, consent per area, the summaries, and whether
+     * any risk has been assessed. Lowest first, so the gaps lead.
+     */
+    private function documentationCompleteness(array $filters): array
+    {
+        $needCount = count(HomeCarePlan::NEED_AREAS);
+        $consentCount = count(HomeCarePlan::CONSENT_AREAS);
+        $summaryCount = count(HomeCarePlan::SUMMARIES);
+
+        $rows = $this->activeCarePlans($filters)->map(function (CarePlan $plan) use ($needCount, $consentCount, $summaryCount) {
+            $hcp = $plan->home_care_plan ?? [];
+            $needs = collect($hcp['needs'] ?? []);
+            $needsRecorded = $needs->filter(fn ($n) => ! empty($n['details']))->count();
+            $consentsRecorded = collect(HomeCarePlan::CONSENT_AREAS)->filter(fn ($a) => isset($needs[$a]['consented']))->count();
+            $summaries = count(array_filter($hcp['summaries'] ?? []));
+
+            $checks = [
+                'About me' => ! empty($hcp['about_me']),
+                'Goals and outcomes' => ! empty($hcp['desired_outcomes']) || ! empty($hcp['goals_and_outcomes']),
+                'Cognitive impairment' => ! empty($hcp['cognitive_impairment_summary']) || ! empty($hcp['cognitive_impairment']),
+                'Risk assessment' => $plan->riskAssessments->isNotEmpty(),
+            ];
+            $score = (count(array_filter($checks)) + $needsRecorded / $needCount + $consentsRecorded / $consentCount + $summaries / $summaryCount)
+                / (count($checks) + 3);
+
+            $missing = array_keys(array_filter($checks, fn ($done) => ! $done));
+            if ($consentsRecorded < $consentCount) {
+                $missing[] = ($consentCount - $consentsRecorded).' consent(s)';
+            }
+
+            return [
+                'client' => $this->clientName($plan->serviceUser),
+                'version' => $plan->version,
+                'completeness' => round($score * 100).'%',
+                'needs' => "{$needsRecorded}/{$needCount}",
+                'consents' => "{$consentsRecorded}/{$consentCount}",
+                'summaries' => "{$summaries}/{$summaryCount}",
+                'missing' => $missing === [] ? '—' : implode(', ', $missing),
+                'sort' => $score,
+            ];
+        });
+
+        return [
+            'title' => 'Documentation Completeness',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'version', 'label' => 'Plan Version'],
+                ['key' => 'completeness', 'label' => 'Complete'],
+                ['key' => 'needs', 'label' => 'Needs Recorded'],
+                ['key' => 'consents', 'label' => 'Consent Recorded'],
+                ['key' => 'summaries', 'label' => 'Summaries'],
+                ['key' => 'missing', 'label' => 'Missing'],
+            ],
+            'rows' => $rows->sortBy('sort')->map(fn ($r) => collect($r)->except('sort')->all())->values(),
+        ];
+    }
+
+    /** The client's consent to each area of support, from their Home Care Plan. */
+    private function careConsent(array $filters): array
+    {
+        $rows = $this->activeCarePlans($filters)->flatMap(function (CarePlan $plan) {
+            $needs = $plan->home_care_plan['needs'] ?? [];
+
+            return collect(HomeCarePlan::CONSENT_AREAS)->map(fn ($area) => [
+                'client' => $this->clientName($plan->serviceUser),
+                'area' => HomeCarePlan::AREA_LABELS[$area],
+                'consent' => match ($needs[$area]['consented'] ?? null) {
+                    true => 'Given',
+                    false => 'Not given',
+                    default => 'Not recorded',
+                },
+                'needs_recorded' => empty($needs[$area]['details']) ? 'No' : 'Yes',
+            ]);
+        });
+
+        return [
+            'title' => 'Consent to Care',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'area', 'label' => 'Area of Support'],
+                ['key' => 'consent', 'label' => 'Consent'],
+                ['key' => 'needs_recorded', 'label' => 'Needs Recorded'],
+            ],
+            'rows' => $rows->values(),
+        ];
+    }
+
+    /** Every risk on an active care plan, highest current risk first. */
+    private function riskRegister(array $filters): array
+    {
+        $rows = $this->activeCarePlans($filters)->flatMap(fn (CarePlan $plan) => $plan->riskAssessments->map(fn (CarePlanRiskAssessment $ra) => [
+            'client' => $this->clientName($plan->serviceUser),
+            'risk_type' => $ra->type === 'medication' ? 'Medication' : $this->label($ra->risk_type),
+            'risk' => $ra->hazard,
+            'initial' => $this->riskRating($ra->riskScore()),
+            'residual' => $this->riskRating($ra->residualRiskScore()),
+            'target' => $this->riskRating($ra->targetRiskScore()),
+            'contingency' => $ra->contingency_plan_required ? ($ra->contingency_plan ? 'Required — in place' : 'Required — not written') : 'Not required',
+            'action_by' => $ra->actionOwner->name ?? '—',
+            'review_date' => $ra->review_date?->toDateString() ?? '—',
+            'sort' => $this->currentRiskScore($ra) ?? 0,
+        ]));
+
+        return [
+            'title' => 'Risk Register',
+            'columns' => [
+                ['key' => 'client', 'label' => 'Client'],
+                ['key' => 'risk_type', 'label' => 'Risk Type'],
+                ['key' => 'risk', 'label' => 'Risk'],
+                ['key' => 'initial', 'label' => 'Initial'],
+                ['key' => 'residual', 'label' => 'Residual'],
+                ['key' => 'target', 'label' => 'Target'],
+                ['key' => 'contingency', 'label' => 'Contingency Plan'],
+                ['key' => 'action_by', 'label' => 'Action By'],
+                ['key' => 'review_date', 'label' => 'Review'],
+            ],
+            'rows' => $rows->sortByDesc('sort')->map(fn ($r) => collect($r)->except('sort')->all())->values(),
         ];
     }
 

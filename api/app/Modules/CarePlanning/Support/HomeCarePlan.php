@@ -33,6 +33,30 @@ class HomeCarePlan
         'final_days',
     ];
 
+    /** Every area except general "support" asks for the client's consent. */
+    public const CONSENT_AREAS = [
+        'personal_care',
+        'continence',
+        'mobility',
+        'meals',
+        'medication',
+        'other_support',
+        'advance_support',
+        'final_days',
+    ];
+
+    public const AREA_LABELS = [
+        'personal_care' => 'Personal care',
+        'continence' => 'Continence care',
+        'mobility' => 'Mobility',
+        'meals' => 'Meals',
+        'medication' => 'Medication support',
+        'support' => 'Support',
+        'other_support' => 'Other support',
+        'advance_support' => 'Advance support',
+        'final_days' => 'Final days',
+    ];
+
     public const SUMMARIES = [
         'personal_needs',
         'meal_requirements',

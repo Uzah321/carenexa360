@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Billing\Models\Invoice;
 use App\Modules\CarePlanning\Models\CarePlan;
+use App\Modules\CarePlanning\Models\CarePlanRiskAssessment;
 use App\Modules\CarePlanning\Models\CarePlanSection;
 use App\Modules\Hr\Models\LeaveRequest;
 use App\Modules\Incidents\Models\Incident;
@@ -423,5 +424,234 @@ class ReportGeneratorControllerTest extends TestCase
         $this->assertNotNull($row);
         $this->assertSame(1, $row['active_clients']);
         $this->assertSame(1, $row['missed_visits']);
+    }
+
+    protected function makeClientWithMedication(Tenant $tenant, array $medication = []): array
+    {
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'Ruth', 'last_name' => 'Chikafu', 'nhs_number' => '462 423 5614', 'date_of_birth' => '1950-03-04']);
+        $medication = Medication::create([
+            'tenant_id' => $tenant->id,
+            'service_user_id' => $serviceUser->id,
+            'name' => 'Metformin',
+            'dose' => '1 tablet',
+            'route' => 'Oral',
+            'frequency' => 'Twice daily',
+            'schedule' => ['08:00', '17:00'],
+            'start_date' => '2026-01-01',
+            'status' => 'active',
+            ...$medication,
+        ]);
+
+        return [$serviceUser, $medication];
+    }
+
+    protected function administer(Tenant $tenant, Medication $medication, array $attributes): MedicationAdministration
+    {
+        return MedicationAdministration::create(['tenant_id' => $tenant->id, 'medication_id' => $medication->id, ...$attributes]);
+    }
+
+    public function test_medication_not_given_lists_reasons_including_legacy_statuses(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [, $medication] = $this->makeClientWithMedication($tenant);
+
+        $this->administer($tenant, $medication, ['status' => 'not_given', 'not_given_reason' => 'social_leave', 'scheduled_time' => '08:00', 'administered_at' => '2026-06-15 08:05:00']);
+        $this->administer($tenant, $medication, ['status' => 'hospitalized', 'administered_at' => '2026-06-16 08:05:00']);
+        $this->administer($tenant, $medication, ['status' => 'administered', 'administered_at' => '2026-06-17 08:05:00']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=medication_not_given&from=2026-06-01&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonPath('rows.0.reason', 'Hospitalised')
+            ->assertJsonPath('rows.1.reason', 'Social leave')
+            ->assertJsonPath('rows.1.due', '08:00');
+
+        $reasons = $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=not_given_reasons&from=2026-06-01&to=2026-06-30')->assertOk();
+        $byReason = collect($reasons->json('rows'))->keyBy('reason');
+        $this->assertSame(1, $byReason['Social leave']['count']);
+        $this->assertSame(1, $byReason['Hospitalised']['count']);
+        $this->assertSame('50%', $byReason['Hospitalised']['percentage']);
+        $this->assertSame(0, $byReason['Refused']['count']);
+    }
+
+    public function test_unrecorded_doses_lists_scheduled_doses_nobody_recorded(): void
+    {
+        $this->travelTo(now()->parse('2026-06-02 12:00:00'));
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [, $medication] = $this->makeClientWithMedication($tenant, ['start_date' => '2026-06-01']);
+
+        // 1 June: both doses recorded (one not given still counts as recorded). 2 June: 08:00 missing, 17:00 not due yet.
+        $this->administer($tenant, $medication, ['status' => 'administered', 'scheduled_time' => '08:00', 'administered_at' => '2026-06-01 08:10:00']);
+        $this->administer($tenant, $medication, ['status' => 'not_given', 'not_given_reason' => 'refused', 'scheduled_time' => '17:00', 'administered_at' => '2026-06-01 17:05:00']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=unrecorded_doses&from=2026-05-25&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.due', '2026-06-02 08:00')
+            ->assertJsonPath('rows.0.medication', 'Metformin');
+    }
+
+    public function test_untimed_records_from_before_dose_times_still_cover_a_dose(): void
+    {
+        $this->travelTo(now()->parse('2026-06-01 20:00:00'));
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [, $medication] = $this->makeClientWithMedication($tenant, ['start_date' => '2026-06-01']);
+
+        // One record with no dose time: covers one of the two doses that day.
+        $this->administer($tenant, $medication, ['status' => 'administered', 'administered_at' => '2026-06-01 08:10:00']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=unrecorded_doses&from=2026-06-01&to=2026-06-01')
+            ->assertOk()
+            ->assertJsonCount(1, 'rows');
+    }
+
+    public function test_late_medication_flags_doses_outside_the_hour_window(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [, $medication] = $this->makeClientWithMedication($tenant);
+
+        $this->administer($tenant, $medication, ['status' => 'administered', 'scheduled_time' => '08:00', 'administered_at' => '2026-06-15 08:45:00']);
+        $this->administer($tenant, $medication, ['status' => 'administered', 'scheduled_time' => '17:00', 'administered_at' => '2026-06-15 18:30:00']);
+        $this->administer($tenant, $medication, ['status' => 'administered', 'scheduled_time' => '17:00', 'administered_at' => '2026-06-16 15:30:00']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=late_medication&from=2026-06-01&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonPath('rows.0.timing', 'Late by 90 min')
+            ->assertJsonPath('rows.1.timing', 'Early by 90 min');
+    }
+
+    public function test_stock_checks_ignore_records_from_before_the_check_existed(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [, $medication] = $this->makeClientWithMedication($tenant);
+
+        $this->administer($tenant, $medication, ['status' => 'administered', 'stock_checked' => true, 'administered_at' => '2026-06-15 08:00:00']);
+        $this->administer($tenant, $medication, ['status' => 'administered', 'stock_checked' => false, 'administered_at' => '2026-06-15 17:00:00']);
+        $this->administer($tenant, $medication, ['status' => 'administered', 'administered_at' => '2026-06-16 08:00:00']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=stock_checks&from=2026-06-01&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.recorded', 2)
+            ->assertJsonPath('rows.0.checked', 1)
+            ->assertJsonPath('rows.0.percentage', '50%');
+    }
+
+    public function test_news2_scores_and_escalations(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'Ruth', 'last_name' => 'Chikafu']);
+
+        $observe = fn (string $type, array $value, string $at) => Observation::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id, 'type' => $type, 'value' => $value, 'recorded_at' => $at,
+        ]);
+        // Normal full set: score 0.
+        $observe('news2', ['respiration_rate' => 16, 'spo2' => 97, 'on_oxygen' => false, 'systolic' => 120, 'pulse' => 70, 'consciousness' => 'alert', 'temperature' => 37.0], '2026-06-15 08:00:00');
+        // Deteriorating full set: RR 25 (3), SpO2 91 (3), oxygen (2), SBP 95 (2), HR 115 (2), new confusion (3), T 39.5 (2) = 17.
+        $observe('news2', ['respiration_rate' => 25, 'spo2' => 91, 'on_oxygen' => true, 'systolic' => 95, 'pulse' => 115, 'consciousness' => 'confusion', 'temperature' => 39.5], '2026-06-16 08:00:00');
+        // Not a NEWS2 type.
+        $observe('weight', ['value' => 70], '2026-06-16 09:00:00');
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=news2_scores&from=2026-06-01&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonPath('rows.0.type', 'Full NEWS2 set')
+            ->assertJsonPath('rows.0.risk', 'High')
+            ->assertJsonPath('rows.1.score', 0);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=news2_escalations&from=2026-06-01&to=2026-06-30')
+            ->assertOk()
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.risk', 'High');
+    }
+
+    protected function makeActivePlan(Tenant $tenant, ServiceUser $serviceUser, ?array $homeCarePlan): CarePlan
+    {
+        $plan = CarePlan::create([
+            'tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id, 'version' => 1, 'status' => 'active',
+            'effective_from' => '2026-01-01', 'home_care_plan' => $homeCarePlan,
+        ]);
+        CarePlanSection::create([
+            'tenant_id' => $tenant->id, 'care_plan_id' => $plan->id, 'area' => 'mobility', 'identified_need' => 'x', 'goal' => 'y',
+            'intervention' => 'z', 'status' => 'ongoing', 'review_date' => now()->addMonth()->toDateString(),
+        ]);
+
+        return $plan;
+    }
+
+    public function test_care_plan_summary_completeness_consent_and_risk_register(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        $ruth = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'Ruth', 'last_name' => 'Chikafu']);
+        $peter = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'Peter', 'last_name' => 'Sibanda']);
+
+        $full = $this->makeActivePlan($tenant, $ruth, [
+            'about_me' => '<p>Retired teacher</p>',
+            'desired_outcomes' => 'Stay at home',
+            'cognitive_impairment_summary' => 'None',
+            'needs' => collect(\App\Modules\CarePlanning\Support\HomeCarePlan::NEED_AREAS)
+                ->mapWithKeys(fn ($a) => [$a => ['details' => '<p>Needs</p>', 'consented' => true]])->all(),
+            'summaries' => collect(\App\Modules\CarePlanning\Support\HomeCarePlan::SUMMARIES)->mapWithKeys(fn ($k) => [$k => 'x'])->all(),
+        ]);
+        CarePlanRiskAssessment::create([
+            'tenant_id' => $tenant->id, 'care_plan_id' => $full->id, 'type' => 'general', 'risk_type' => 'falls',
+            'hazard' => 'Falls on stairs', 'likelihood' => 4, 'severity' => 4, 'residual_likelihood' => 3, 'residual_severity' => 4,
+            'target_likelihood' => 2, 'target_severity' => 2, 'contingency_plan_required' => true, 'review_date' => '2026-01-15',
+        ]);
+        $this->makeActivePlan($tenant, $peter, ['needs' => ['continence' => ['details' => null, 'consented' => false]]]);
+
+        $summary = $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=care_plan_summary')->assertOk();
+        $byClient = collect($summary->json('rows'))->keyBy('client');
+        $this->assertSame(1, $byClient['Ruth Chikafu']['high_risks']);
+        $this->assertSame('Yes', $byClient['Ruth Chikafu']['home_care_plan']);
+        $this->assertSame('2026-01-15', $byClient['Ruth Chikafu']['next_review']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=documentation_completeness')
+            ->assertOk()
+            ->assertJsonPath('rows.0.client', 'Peter Sibanda')
+            ->assertJsonPath('rows.0.consents', '1/8')
+            ->assertJsonPath('rows.1.client', 'Ruth Chikafu')
+            ->assertJsonPath('rows.1.completeness', '100%')
+            ->assertJsonPath('rows.1.missing', '—');
+
+        $consent = collect($this->actingAs($manager)->getJson('/api/v1/reports/generate?key=care_consent')->assertOk()->json('rows'));
+        $this->assertCount(16, $consent);
+        $this->assertSame('Not given', $consent->firstWhere(fn ($r) => $r['client'] === 'Peter Sibanda' && $r['area'] === 'Continence care')['consent']);
+        $this->assertSame('Not recorded', $consent->firstWhere(fn ($r) => $r['client'] === 'Peter Sibanda' && $r['area'] === 'Mobility')['consent']);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=risk_register')
+            ->assertOk()
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.risk_type', 'Falls')
+            ->assertJsonPath('rows.0.initial', 'High (16)')
+            ->assertJsonPath('rows.0.residual', 'High (12)')
+            ->assertJsonPath('rows.0.target', 'Low (4)')
+            ->assertJsonPath('rows.0.contingency', 'Required — not written');
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=care_plan_reviews_overdue')
+            ->assertOk()
+            ->assertJsonPath('rows.0.area', 'Risk: Falls on stairs');
+    }
+
+    public function test_client_profile_summary_includes_nhs_number_and_care_plan(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        [$serviceUser] = $this->makeClientWithMedication($tenant);
+        $this->makeActivePlan($tenant, $serviceUser, null);
+
+        $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=client_profile_summary')
+            ->assertOk()
+            ->assertJsonPath('rows.0.nhs_number', '462 423 5614')
+            ->assertJsonPath('rows.0.date_of_birth', '1950-03-04')
+            ->assertJsonPath('rows.0.care_plan', 'Version 1');
     }
 }
