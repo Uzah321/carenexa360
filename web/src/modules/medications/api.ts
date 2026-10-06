@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { Medication, MedicationAdministration, MedicationAdministrationStatus } from "../../lib/types";
+import type {
+  Medication,
+  MedicationAdministration,
+  MedicationAdministrationStatus,
+  MedicationNotGivenReason,
+} from "../../lib/types";
 
 export function useMedications(serviceUserId: number) {
   return useQuery({
@@ -99,12 +104,15 @@ export function useMedicationAdministrations(medicationId: number | null) {
 
 export interface RecordAdministrationInput {
   status: MedicationAdministrationStatus;
+  scheduled_time?: string | null;
+  not_given_reason?: MedicationNotGivenReason | null;
+  stock_checked?: boolean;
   administered_at?: string;
   witness_id?: number | null;
   notes?: string;
 }
 
-export function useRecordAdministration(medicationId: number | null) {
+export function useRecordAdministration(medicationId: number | null, serviceUserId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: RecordAdministrationInput) => {
@@ -116,6 +124,8 @@ export function useRecordAdministration(medicationId: number | null) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["medications", medicationId, "administrations"] });
+      // The medication list carries today's records, which drive the round.
+      void queryClient.invalidateQueries({ queryKey: ["service-users", serviceUserId, "medications"] });
     },
   });
 }

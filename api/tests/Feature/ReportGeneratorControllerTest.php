@@ -148,6 +148,21 @@ class ReportGeneratorControllerTest extends TestCase
         $response->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('rows.0.status', 'refused')->assertJsonPath('rows.0.medication', 'Paracetamol');
     }
 
+    public function test_refused_medication_report_includes_doses_not_given_because_refused(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $manager = $this->makeReportViewer($tenant);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'Ruth', 'last_name' => 'Chikafu']);
+        $medication = Medication::create(['tenant_id' => $tenant->id, 'service_user_id' => $serviceUser->id, 'name' => 'Paracetamol', 'dose' => '500mg', 'route' => 'Oral', 'frequency' => 'Once daily', 'start_date' => '2026-01-01', 'status' => 'active']);
+
+        MedicationAdministration::create(['tenant_id' => $tenant->id, 'medication_id' => $medication->id, 'status' => 'not_given', 'not_given_reason' => 'refused', 'administered_at' => '2026-06-15 08:00:00']);
+        MedicationAdministration::create(['tenant_id' => $tenant->id, 'medication_id' => $medication->id, 'status' => 'not_given', 'not_given_reason' => 'unwell', 'administered_at' => '2026-06-16 08:00:00']);
+
+        $response = $this->actingAs($manager)->getJson('/api/v1/reports/generate?key=refused_medication&from=2026-06-01&to=2026-06-30');
+
+        $response->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('rows.0.reason', 'refused');
+    }
+
     public function test_blood_pressure_trend_extracts_systolic_and_diastolic_from_json_value(): void
     {
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);

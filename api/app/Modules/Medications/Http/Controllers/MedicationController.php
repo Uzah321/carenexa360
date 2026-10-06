@@ -20,7 +20,10 @@ class MedicationController extends Controller
         );
 
         return MedicationResource::collection(
-            $serviceUser->medications()->orderByDesc('created_at')->get()
+            $serviceUser->medications()
+                ->with(['todayAdministrations' => fn ($q) => $q->with(['administeredBy', 'witness'])->orderByDesc('administered_at')])
+                ->orderByDesc('created_at')
+                ->get()
         );
     }
 

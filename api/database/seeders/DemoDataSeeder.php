@@ -343,23 +343,23 @@ class DemoDataSeeder extends Seeder
     {
         $medsByServiceUser = [
             0 => [ // Ruth Chikafu
-                ['name' => 'Metformin', 'strength' => '500mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Twice daily', 'is_prn' => false],
-                ['name' => 'Lisinopril', 'strength' => '10mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily', 'is_prn' => false],
+                ['name' => 'Metformin', 'strength' => '500mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Twice daily', 'schedule' => ['08:00', '17:00'], 'is_prn' => false],
+                ['name' => 'Lisinopril', 'strength' => '10mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily', 'schedule' => ['08:00'], 'is_prn' => false],
                 ['name' => 'Paracetamol', 'strength' => '500mg', 'dose' => '2 tablets', 'route' => 'Oral', 'frequency' => 'As required', 'is_prn' => true],
             ],
             1 => [ // Josiah Ndlovu
-                ['name' => 'Co-careldopa', 'strength' => '25mg/100mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Four times daily', 'is_prn' => false],
+                ['name' => 'Co-careldopa', 'strength' => '25mg/100mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Four times daily', 'schedule' => ['08:00', '12:00', '16:00', '19:30'], 'is_prn' => false],
             ],
             2 => [ // Agnes Moyo
-                ['name' => 'Donepezil', 'strength' => '5mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily, evening', 'is_prn' => false],
+                ['name' => 'Donepezil', 'strength' => '5mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily, evening', 'schedule' => ['19:30'], 'is_prn' => false],
             ],
             3 => [ // Peter Sibanda
                 ['name' => 'Salbutamol Inhaler', 'strength' => '100mcg', 'dose' => '2 puffs', 'route' => 'Inhaled', 'frequency' => 'As required', 'is_prn' => true],
-                ['name' => 'Tiotropium', 'strength' => '18mcg', 'dose' => '1 capsule (inhaled)', 'route' => 'Inhaled', 'frequency' => 'Once daily', 'is_prn' => false],
+                ['name' => 'Tiotropium', 'strength' => '18mcg', 'dose' => '1 capsule (inhaled)', 'route' => 'Inhaled', 'frequency' => 'Once daily', 'schedule' => ['08:00'], 'is_prn' => false],
             ],
             4 => [ // Faith Gumbo
-                ['name' => 'Atorvastatin', 'strength' => '20mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily, evening', 'is_prn' => false],
-                ['name' => 'Aspirin', 'strength' => '75mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily', 'is_prn' => false],
+                ['name' => 'Atorvastatin', 'strength' => '20mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily, evening', 'schedule' => ['19:30'], 'is_prn' => false],
+                ['name' => 'Aspirin', 'strength' => '75mg', 'dose' => '1 tablet', 'route' => 'Oral', 'frequency' => 'Once daily', 'schedule' => ['08:00'], 'is_prn' => false],
             ],
         ];
 
@@ -378,7 +378,7 @@ class DemoDataSeeder extends Seeder
                     'dose' => $med['dose'],
                     'route' => $med['route'],
                     'frequency' => $med['frequency'],
-                    'schedule' => null,
+                    'schedule' => $med['schedule'] ?? null,
                     'start_date' => now()->subMonths(random_int(1, 6))->toDateString(),
                     'end_date' => null,
                     'prescriber' => 'Dr. M. Chidziva',
@@ -395,25 +395,40 @@ class DemoDataSeeder extends Seeder
                     continue;
                 }
 
-                // Administration history for the last 10 days, mostly on time.
+                // Administration history for the last 10 days, one record per
+                // scheduled dose, mostly on time. Today's later doses are left
+                // for the round.
                 for ($daysAgo = 9; $daysAgo >= 0; $daysAgo--) {
-                    $status = 'administered';
-                    if ($daysAgo === 4 && $index === 0) {
-                        $status = 'refused';
-                    } elseif ($daysAgo === 2 && $index === 3) {
-                        $status = 'missed';
-                    }
+                    foreach ($med['schedule'] as $slot => $time) {
+                        [$hour, $minute] = array_map('intval', explode(':', $time));
+                        $givenAt = now()->subDays($daysAgo)->setTime($hour, $minute + random_int(0, 20));
+                        if ($givenAt->isFuture()) {
+                            continue;
+                        }
 
-                    MedicationAdministration::create([
-                        'tenant_id' => $this->tenant->id,
-                        'medication_id' => $medication->id,
-                        'visit_id' => null,
-                        'status' => $status,
-                        'administered_at' => now()->subDays($daysAgo)->setTime(8, random_int(0, 30)),
-                        'administered_by' => $carers[array_rand($carers)]->id,
-                        'witness_id' => null,
-                        'notes' => $status === 'refused' ? 'Service user declined medication this morning.' : ($status === 'missed' ? 'Carer arrived after service user had already left for a hospital appointment.' : null),
-                    ]);
+                        $status = 'administered';
+                        $reason = null;
+                        if ($daysAgo === 4 && $index === 0 && $slot === 0) {
+                            $status = 'not_given';
+                            $reason = 'refused';
+                        } elseif ($daysAgo === 2 && $index === 3) {
+                            $status = 'missed';
+                        }
+
+                        MedicationAdministration::create([
+                            'tenant_id' => $this->tenant->id,
+                            'medication_id' => $medication->id,
+                            'visit_id' => null,
+                            'status' => $status,
+                            'scheduled_time' => $time,
+                            'not_given_reason' => $reason,
+                            'stock_checked' => $status === 'administered',
+                            'administered_at' => $givenAt,
+                            'administered_by' => $carers[array_rand($carers)]->id,
+                            'witness_id' => null,
+                            'notes' => $status === 'not_given' ? 'Service user declined medication this morning.' : ($status === 'missed' ? 'Carer arrived after service user had already left for a hospital appointment.' : null),
+                        ]);
+                    }
                 }
             }
         }

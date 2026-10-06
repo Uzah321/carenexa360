@@ -27,6 +27,14 @@ class StoreMedicationAdministrationRequest extends FormRequest
                 Rule::exists('visits', 'id')->where('tenant_id', $tenantId),
             ],
             'status' => ['required', 'string', Rule::in(MedicationAdministration::STATUSES)],
+            'scheduled_time' => ['nullable', 'date_format:H:i'],
+            'not_given_reason' => [
+                'nullable',
+                'required_if:status,not_given',
+                'prohibited_unless:status,not_given',
+                Rule::in(MedicationAdministration::NOT_GIVEN_REASONS),
+            ],
+            'stock_checked' => ['nullable', 'boolean'],
             'administered_at' => ['nullable', 'date'],
             'witness_id' => [
                 'nullable',
@@ -45,7 +53,7 @@ class StoreMedicationAdministrationRequest extends FormRequest
             if (
                 $medication
                 && $medication->is_controlled_drug
-                && $this->input('status') === 'administered'
+                && in_array($this->input('status'), ['administered', 'prn'], true)
                 && ! $this->filled('witness_id')
             ) {
                 $validator->errors()->add(

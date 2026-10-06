@@ -334,7 +334,9 @@ class ReportGeneratorController extends Controller
             'COALESCE(administered_at, created_at) BETWEEN ? AND ?',
             ["{$filters['from']} 00:00:00", "{$filters['to']} 23:59:59"]
         )
-            ->when($status, fn ($q) => $q->where('status', $status))
+            // A "not given" record with the same reason counts too, e.g. refused.
+            ->when($status, fn ($q) => $q->where(fn ($q) => $q->where('status', $status)
+                ->orWhere(fn ($q) => $q->where('status', 'not_given')->where('not_given_reason', $status))))
             ->when($filters['branch_id'], fn ($q) => $q->whereHas(
                 'medication.serviceUser',
                 fn ($su) => $su->where('branch_id', $filters['branch_id'])
@@ -350,6 +352,7 @@ class ReportGeneratorController extends Controller
                 ['key' => 'client', 'label' => 'Client'],
                 ['key' => 'medication', 'label' => 'Medication'],
                 ['key' => 'status', 'label' => 'Status'],
+                ['key' => 'reason', 'label' => 'Reason Not Given'],
                 ['key' => 'administered_by', 'label' => 'Administered By'],
             ],
             'rows' => $administrations->map(fn (MedicationAdministration $m) => [
@@ -357,6 +360,7 @@ class ReportGeneratorController extends Controller
                 'client' => $this->clientName($m->medication?->serviceUser),
                 'medication' => $m->medication?->name ?? '—',
                 'status' => str_replace('_', ' ', $m->status),
+                'reason' => $m->not_given_reason ? str_replace('_', ' ', $m->not_given_reason) : '—',
                 'administered_by' => $m->administeredBy->name ?? '—',
             ]),
         ];

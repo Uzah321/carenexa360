@@ -66,4 +66,10 @@ class Medication extends Model
     {
         return $this->hasMany(MedicationAdministration::class);
     }
+
+    /** Today's records — what the day's medication round is checked against. */
+    public function todayAdministrations(): HasMany
+    {
+        return $this->administrations()->whereDate('administered_at', today());
+    }
 }

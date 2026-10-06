@@ -22,6 +22,25 @@ class MedicationAdministration extends Model
         'hospitalized',
         'self_administered',
         'prn',
+        'not_given',
+    ];
+
+    /**
+     * Why a scheduled dose wasn't given — required when status is not_given.
+     * (refused, not_available, hospitalized and self_administered also exist
+     * as statuses from before not_given did; older records keep them.)
+     */
+    public const NOT_GIVEN_REASONS = [
+        'refused',
+        'unwell',
+        'hospitalised',
+        'social_leave',
+        'medication_not_available',
+        'client_cancelled',
+        'self_administered',
+        'administered_by_family',
+        'prn_not_required',
+        'given_by_other_carer',
     ];
 
     protected $fillable = [
@@ -29,6 +48,9 @@ class MedicationAdministration extends Model
         'medication_id',
         'visit_id',
         'status',
+        'scheduled_time',
+        'not_given_reason',
+        'stock_checked',
         'administered_at',
         'administered_by',
         'witness_id',
@@ -39,6 +61,7 @@ class MedicationAdministration extends Model
     {
         return [
             'administered_at' => 'datetime',
+            'stock_checked' => 'boolean',
         ];
     }
 

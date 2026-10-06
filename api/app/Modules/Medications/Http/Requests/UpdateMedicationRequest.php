@@ -20,7 +20,7 @@ class UpdateMedicationRequest extends FormRequest
             'dose' => ['sometimes', 'string', 'max:100'],
             'frequency' => ['sometimes', 'string', 'max:255'],
             'schedule' => ['nullable', 'array'],
-            'schedule.*' => ['string'],
+            'schedule.*' => ['string', 'date_format:H:i'],
             'end_date' => ['nullable', 'date'],
             'instructions' => ['nullable', 'string'],
             'status' => ['sometimes', 'string', Rule::in(Medication::STATUSES)],

@@ -32,17 +32,36 @@ import {
   type UpdateMedicationInput,
 } from "../../medications/api";
 import { useStaff } from "../../staff/api";
+import { useAuth } from "../../../lib/auth-context";
 import {
-  MEDICATION_ADMINISTRATION_STATUSES,
+  MEDICATION_NOT_GIVEN_REASONS,
   type Medication,
   type MedicationAdministrationStatus,
+  type MedicationNotGivenReason,
 } from "../../../lib/types";
+import { ThumbsUp } from "lucide-react";
+import {
+  NOT_GIVEN_REASON_LABELS,
+  administrationLabel,
+  administrationTone,
+  recordableStatuses,
+} from "../../medications/administration";
+import { MedicationRound } from "../../medications/components/MedicationRound";
+import { ScheduleTimesInput } from "../../medications/components/ScheduleTimesInput";
+
+const OUTCOME_LABELS: Partial<Record<MedicationAdministrationStatus, string>> = {
+  administered: "Given",
+  prn: "Given (PRN)",
+  not_given: "Not given",
+  missed: "Missed",
+};
 
 const EMPTY_FORM: CreateMedicationInput = {
   name: "",
   dose: "",
   route: "",
   frequency: "",
+  schedule: [],
   start_date: "",
 };
 
@@ -63,6 +82,7 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
   const updateMedication = useUpdateMedication(serviceUserId);
   const archiveMedication = useArchiveMedication(serviceUserId);
   const { data: staff } = useStaff(1, 500);
+  const { user } = useAuth();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<CreateMedicationInput>(EMPTY_FORM);
@@ -70,6 +90,9 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
 
   const [activeMedication, setActiveMedication] = useState<Medication | null>(null);
   const [recordStatus, setRecordStatus] = useState<MedicationAdministrationStatus>("administered");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [notGivenReason, setNotGivenReason] = useState<MedicationNotGivenReason | "">("");
+  const [stockChecked, setStockChecked] = useState(false);
   const [witnessId, setWitnessId] = useState<number | "">("");
   const [administrationNotes, setAdministrationNotes] = useState("");
   const [recordError, setRecordError] = useState<string | null>(null);
@@ -84,7 +107,24 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
   const { data: administrations, isLoading: isLoadingAdministrations } = useMedicationAdministrations(
     activeMedication?.id ?? null,
   );
-  const recordAdministration = useRecordAdministration(activeMedication?.id ?? null);
+  const recordAdministration = useRecordAdministration(activeMedication?.id ?? null, serviceUserId);
+
+  const isGiven = recordStatus === "administered" || recordStatus === "prn";
+
+  function resetRecordForm(medication: Medication | null, time = "") {
+    setRecordStatus(medication?.is_prn ? "prn" : "administered");
+    setScheduledTime(time);
+    setNotGivenReason("");
+    setStockChecked(false);
+    setWitnessId("");
+    setAdministrationNotes("");
+    setRecordError(null);
+  }
+
+  function openRecord(medication: Medication, time = "") {
+    setActiveMedication(medication);
+    resetRecordForm(medication, time);
+  }
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -104,12 +144,13 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
     try {
       await recordAdministration.mutateAsync({
         status: recordStatus,
-        witness_id: witnessId === "" ? undefined : witnessId,
+        scheduled_time: scheduledTime || null,
+        not_given_reason: recordStatus === "not_given" && notGivenReason ? notGivenReason : null,
+        stock_checked: stockChecked,
+        witness_id: isGiven && witnessId !== "" ? witnessId : undefined,
         notes: administrationNotes || undefined,
       });
-      setRecordStatus("administered");
-      setWitnessId("");
-      setAdministrationNotes("");
+      resetRecordForm(activeMedication);
     } catch (err) {
       setRecordError(apiErrorMessage(err, "Could not record this administration. Please try again."));
     }
@@ -176,7 +217,7 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
         <button
           type="button"
           className="text-sm font-medium text-teal hover:text-teal/90"
-          onClick={() => setActiveMedication(row)}
+          onClick={() => openRecord(row)}
         >
           Record / History
         </button>
@@ -212,6 +253,12 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
         </div>
       </CardHeader>
       <CardBody>
+        {(medications ?? []).length > 0 && (
+          <section className="mb-6 border-b border-line pb-6">
+            <h3 className="mb-3 text-sm font-semibold text-ink">Today's round</h3>
+            <MedicationRound medications={medications ?? []} onRecord={openRecord} />
+          </section>
+        )}
         {!isLoading && (medications ?? []).length === 0 ? (
           <EmptyState message="No medications recorded yet." />
         ) : (
@@ -277,6 +324,15 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
               onChange={(e) => setForm({ ...form, frequency: e.target.value })}
             />
           </FormField>
+          {!form.is_prn && (
+            <FormField label="Dose times" htmlFor="med-schedule">
+              <ScheduleTimesInput
+                id="med-schedule"
+                value={form.schedule ?? []}
+                onChange={(schedule) => setForm({ ...form, schedule })}
+              />
+            </FormField>
+          )}
           <FormField label="Start date" htmlFor="med-start">
             <Input
               id="med-start"
@@ -355,6 +411,15 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
               />
             </FormField>
           </div>
+          {!editingMedication?.is_prn && (
+            <FormField label="Dose times" htmlFor="edit-med-schedule">
+              <ScheduleTimesInput
+                id="edit-med-schedule"
+                value={editDraft.schedule ?? []}
+                onChange={(schedule) => setEditDraft({ ...editDraft, schedule })}
+              />
+            </FormField>
+          )}
           <FormField label="End date" htmlFor="edit-med-end-date">
             <Input
               id="edit-med-end-date"
@@ -414,6 +479,12 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
             <div className="flex justify-between border-b border-line py-2 text-sm">
               <dt className="text-inksoft">Frequency</dt>
               <dd className="font-medium text-ink">{viewingMedication.frequency}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2 text-sm">
+              <dt className="text-inksoft">Dose times</dt>
+              <dd className="font-medium text-ink">
+                {viewingMedication.schedule.length > 0 ? viewingMedication.schedule.join(", ") : "—"}
+              </dd>
             </div>
             <div className="flex justify-between border-b border-line py-2 text-sm">
               <dt className="text-inksoft">Start date</dt>
@@ -482,20 +553,69 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
                   <Alert tone="danger">{recordError}</Alert>
                 </div>
               )}
-              <FormField label="Status" htmlFor="admin-status">
+              {activeMedication.schedule.length > 0 && !activeMedication.is_prn && (
+                <FormField label="Dose due at" htmlFor="admin-scheduled-time">
+                  <Select
+                    id="admin-scheduled-time"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                  >
+                    <option value="">Not a scheduled dose</option>
+                    {activeMedication.schedule.map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              )}
+              <FormField label="Outcome" htmlFor="admin-status">
                 <Select
                   id="admin-status"
                   value={recordStatus}
                   onChange={(e) => setRecordStatus(e.target.value as MedicationAdministrationStatus)}
                 >
-                  {MEDICATION_ADMINISTRATION_STATUSES.map((status) => (
+                  {recordableStatuses(activeMedication).map((status) => (
                     <option key={status} value={status}>
-                      {status.replaceAll("_", " ")}
+                      {OUTCOME_LABELS[status]}
                     </option>
                   ))}
                 </Select>
               </FormField>
-              {activeMedication.is_controlled_drug && (
+              {recordStatus === "not_given" && (
+                <>
+                  <FormField label="Not given by" htmlFor="admin-not-given-by">
+                    <Input id="admin-not-given-by" value={user?.name ?? ""} readOnly disabled />
+                  </FormField>
+                  <FormField label="Reason not given" htmlFor="admin-not-given-reason">
+                    <Select
+                      id="admin-not-given-reason"
+                      required
+                      value={notGivenReason}
+                      onChange={(e) => setNotGivenReason(e.target.value as MedicationNotGivenReason)}
+                    >
+                      <option value="" disabled>
+                        Select reason for not given
+                      </option>
+                      {MEDICATION_NOT_GIVEN_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {NOT_GIVEN_REASON_LABELS[reason]}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                </>
+              )}
+              <div className="mb-4 flex items-center gap-2">
+                <ThumbsUp className={`h-4 w-4 ${stockChecked ? "text-lime" : "text-inksoft"}`} aria-hidden />
+                <Checkbox
+                  id="admin-stock-checked"
+                  label="Stock checked and correct"
+                  checked={stockChecked}
+                  onChange={(e) => setStockChecked(e.target.checked)}
+                />
+              </div>
+              {activeMedication.is_controlled_drug && isGiven && (
                 <FormField label="Witness" htmlFor="admin-witness">
                   <Select
                     id="admin-witness"
@@ -522,7 +642,7 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
                 />
               </FormField>
               <Button type="submit" isLoading={recordAdministration.isPending}>
-                Record Administration
+                Record
               </Button>
             </form>
 
@@ -538,8 +658,8 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
                   >
                     <div className="flex items-center justify-between">
                       <StatusBadge
-                        label={administration.status.replaceAll("_", " ")}
-                        tone={administration.status === "administered" ? "success" : "neutral"}
+                        label={administrationLabel(administration)}
+                        tone={administrationTone(administration.status)}
                       />
                       <span className="text-xs text-inksoft">
                         {administration.administered_at
@@ -548,8 +668,10 @@ export function MedicationsTab({ serviceUserId }: { serviceUserId: number }) {
                       </span>
                     </div>
                     <div className="mt-1 text-inksoft">
+                      {administration.scheduled_time && `Due ${administration.scheduled_time} · `}
                       By {administration.administered_by_name ?? "—"}
                       {administration.witness_name && ` · Witnessed by ${administration.witness_name}`}
+                      {administration.stock_checked && " · Stock checked"}
                     </div>
                     {administration.notes && <div className="mt-1 text-inksoft">{administration.notes}</div>}
                   </li>

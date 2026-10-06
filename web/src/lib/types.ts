@@ -477,14 +477,34 @@ export const MEDICATION_ADMINISTRATION_STATUSES = [
   "hospitalized",
   "self_administered",
   "prn",
+  "not_given",
 ] as const;
 export type MedicationAdministrationStatus = (typeof MEDICATION_ADMINISTRATION_STATUSES)[number];
+
+/** Why a dose wasn't given — required when status is "not_given". Mirrors MedicationAdministration::NOT_GIVEN_REASONS. */
+export const MEDICATION_NOT_GIVEN_REASONS = [
+  "refused",
+  "unwell",
+  "hospitalised",
+  "social_leave",
+  "medication_not_available",
+  "client_cancelled",
+  "self_administered",
+  "administered_by_family",
+  "prn_not_required",
+  "given_by_other_carer",
+] as const;
+export type MedicationNotGivenReason = (typeof MEDICATION_NOT_GIVEN_REASONS)[number];
 
 export interface MedicationAdministration {
   id: number;
   medication_id: number;
   visit_id: number | null;
   status: MedicationAdministrationStatus;
+  /** The schedule slot ("19:30") this record answers for, if any. */
+  scheduled_time: string | null;
+  not_given_reason: MedicationNotGivenReason | null;
+  stock_checked: boolean | null;
   administered_at: string | null;
   administered_by: number | null;
   administered_by_name?: string | null;
@@ -516,6 +536,8 @@ export interface Medication {
   archived_at: string | null;
   created_by: number | null;
   administrations?: MedicationAdministration[];
+  /** Today's records, for the medication round. Included on the service user's medication list. */
+  today_administrations?: MedicationAdministration[];
   created_at: string;
 }
 

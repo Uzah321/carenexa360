@@ -31,6 +31,7 @@ class MedicationResource extends JsonResource
             'archived_at' => $this->archived_at,
             'created_by' => $this->created_by,
             'administrations' => MedicationAdministrationResource::collection($this->whenLoaded('administrations')),
+            'today_administrations' => MedicationAdministrationResource::collection($this->whenLoaded('todayAdministrations')),
             'created_at' => $this->created_at,
         ];
     }

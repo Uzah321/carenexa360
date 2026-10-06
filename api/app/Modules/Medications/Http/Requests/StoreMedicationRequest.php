@@ -25,7 +25,7 @@ class StoreMedicationRequest extends FormRequest
             'route' => ['required', 'string', 'max:100'],
             'frequency' => ['required', 'string', 'max:255'],
             'schedule' => ['nullable', 'array'],
-            'schedule.*' => ['string'],
+            'schedule.*' => ['string', 'date_format:H:i'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'prescriber' => ['nullable', 'string', 'max:255'],
