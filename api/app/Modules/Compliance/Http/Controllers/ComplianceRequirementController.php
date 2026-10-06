@@ -8,6 +8,8 @@ use App\Modules\Compliance\Http\Requests\UpdateComplianceRequirementRequest;
 use App\Modules\Compliance\Http\Resources\ComplianceRequirementResource;
 use App\Modules\Compliance\Models\ComplianceRequirement;
 use App\Modules\Training\Support\ComplianceRoles;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use Illuminate\Http\Request;
 
 class ComplianceRequirementController extends Controller
@@ -41,6 +43,8 @@ class ComplianceRequirementController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        AssignmentNotifier::notify($requirement->responsible_user_id, AssignmentMessages::complianceRequirement($requirement));
+
         return (new ComplianceRequirementResource($requirement->load('responsibleUser')))
             ->response()
             ->setStatusCode(201);
@@ -62,7 +66,14 @@ class ComplianceRequirementController extends Controller
         abort_unless($request->user()->hasAnyRole(ComplianceRoles::ALLOWED), 403);
         abort_unless($request->user()->ownsTenant($complianceRequirement->tenant_id), 403);
 
+        $previousResponsible = $complianceRequirement->responsible_user_id;
         $complianceRequirement->update($request->validated());
+
+        AssignmentNotifier::notifyIfChanged(
+            $previousResponsible,
+            $complianceRequirement->responsible_user_id,
+            AssignmentMessages::complianceRequirement($complianceRequirement),
+        );
 
         return new ComplianceRequirementResource($complianceRequirement->fresh()->load('responsibleUser'));
     }

@@ -5,6 +5,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Checkbox,
   DataTable,
   EmptyState,
   FileUpload,
@@ -30,6 +31,7 @@ import {
   type CreateContactInput,
 } from "../api";
 import { SERVICE_USER_CONTACT_TYPES, type ServiceUser, type ServiceUserContact } from "../../../lib/types";
+import { useStaff } from "../../staff/api";
 
 const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
 
@@ -120,6 +122,8 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <PersonalDetailsCard serviceUser={serviceUser} />
 
+      <CareTeamCard serviceUser={serviceUser} />
+
       <MedicalSummaryCard serviceUser={serviceUser} />
 
       <HospitalRecordsCard serviceUser={serviceUser} />
@@ -195,6 +199,106 @@ function EditableCard({
         </form>
       </Modal>
     </Card>
+  );
+}
+
+/** Care manager and carers. Anyone newly added is emailed by the API. */
+function CareTeamCard({ serviceUser }: { serviceUser: ServiceUser }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
+  const { data: staff, isLoading: isLoadingStaff } = useStaff(1, 500);
+  const currentCarerIds = (serviceUser.carers ?? []).map((c) => c.id);
+  const [managerId, setManagerId] = useState<number | "">(serviceUser.care_manager_id ?? "");
+  const [carerIds, setCarerIds] = useState<number[]>(currentCarerIds);
+
+  const staffMembers = staff?.data ?? [];
+  // Inactive staff can't be newly picked, but stay listed while still on the team.
+  const selectable = staffMembers.filter(
+    (s) => s.employment_status !== "inactive" || carerIds.includes(s.user_id) || s.user_id === managerId,
+  );
+  const managerName = staffMembers.find((s) => s.user_id === serviceUser.care_manager_id)?.name;
+
+  function openModal() {
+    setManagerId(serviceUser.care_manager_id ?? "");
+    setCarerIds(currentCarerIds);
+    setError(null);
+    setIsOpen(true);
+  }
+
+  function toggleCarer(userId: number, checked: boolean) {
+    setCarerIds((prev) => (checked ? [...prev, userId] : prev.filter((id) => id !== userId)));
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await updateServiceUser.mutateAsync({ care_manager_id: managerId === "" ? null : managerId, carer_ids: carerIds });
+      setIsOpen(false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save the care team. Please try again."));
+    }
+  }
+
+  return (
+    <EditableCard
+      title="Care Team"
+      formId="edit-care-team-form"
+      isOpen={isOpen}
+      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
+      isSaving={updateServiceUser.isPending}
+      error={error}
+      onSubmit={handleSave}
+      form={
+        isLoadingStaff ? (
+          // Until staff load, the dropdown would show "Unassigned" for a client who has a manager.
+          <p className="text-sm text-inksoft">Loading staff…</p>
+        ) : (
+        <>
+          <FormField label="Care manager" htmlFor="ct-manager">
+            <Select id="ct-manager" value={managerId} onChange={(e) => setManagerId(e.target.value ? Number(e.target.value) : "")}>
+              <option value="">Unassigned</option>
+              {selectable.map((s) => (
+                <option key={s.id} value={s.user_id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <fieldset className="mb-2">
+            <legend className="mb-2 text-sm font-medium text-ink">Carers</legend>
+            {selectable.length === 0 ? (
+              <p className="text-sm text-inksoft">No staff found.</p>
+            ) : (
+              <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                {selectable.map((s) => (
+                  <Checkbox
+                    key={s.id}
+                    id={`ct-carer-${s.user_id}`}
+                    label={s.job_title ? `${s.name} — ${s.job_title}` : s.name}
+                    checked={carerIds.includes(s.user_id)}
+                    onChange={(e) => toggleCarer(s.user_id, e.target.checked)}
+                  />
+                ))}
+              </div>
+            )}
+          </fieldset>
+          <p className="text-xs text-inksoft">Anyone newly added is emailed to let them know.</p>
+        </>
+        )
+      }
+    >
+      <dl>
+        <InfoRow label="Care manager" value={managerName ?? (serviceUser.care_manager_id ? "Assigned" : null)} />
+        <div className="py-2 text-sm">
+          <dt className="mb-1 text-inksoft">Carers</dt>
+          <dd className="font-medium text-ink">
+            {(serviceUser.carers ?? []).length > 0 ? (serviceUser.carers ?? []).map((c) => c.name).join(", ") : "—"}
+          </dd>
+        </div>
+      </dl>
+    </EditableCard>
   );
 }
 

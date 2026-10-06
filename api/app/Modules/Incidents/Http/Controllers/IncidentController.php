@@ -7,6 +7,8 @@ use App\Modules\Incidents\Http\Requests\StoreIncidentRequest;
 use App\Modules\Incidents\Http\Requests\UpdateIncidentRequest;
 use App\Modules\Incidents\Http\Resources\IncidentResource;
 use App\Modules\Incidents\Models\Incident;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use Illuminate\Http\Request;
 
 class IncidentController extends Controller
@@ -31,6 +33,8 @@ class IncidentController extends Controller
             'status' => 'reported',
             'reported_by' => $request->user()->id,
         ]);
+
+        AssignmentNotifier::notify($incident->assigned_to, AssignmentMessages::incident($incident));
 
         return (new IncidentResource($incident->load(['serviceUser', 'reportedBy', 'assignedTo'])))
             ->response()
@@ -62,7 +66,10 @@ class IncidentController extends Controller
             $attributes['closed_at'] = now();
         }
 
+        $previousAssignee = $incident->assigned_to;
         $incident->update($attributes);
+
+        AssignmentNotifier::notifyIfChanged($previousAssignee, $incident->assigned_to, AssignmentMessages::incident($incident));
 
         return new IncidentResource($incident->fresh()->load(['serviceUser', 'reportedBy', 'assignedTo', 'reviewedBy']));
     }

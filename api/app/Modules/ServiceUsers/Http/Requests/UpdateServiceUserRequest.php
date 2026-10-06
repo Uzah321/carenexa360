@@ -34,6 +34,14 @@ class UpdateServiceUserRequest extends FormRequest
                 'integer',
                 Rule::exists('users', 'id')->where('tenant_id', $serviceUser->tenant_id),
             ],
+            // The client's care team — staff only (anyone with a staff profile
+            // in this tenant), never family-portal accounts.
+            'carer_ids' => ['sometimes', 'array'],
+            'carer_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('staff_profiles', 'user_id')->where('tenant_id', $serviceUser->tenant_id),
+            ],
             'first_name' => ['sometimes', 'required', 'string', 'max:255'],
             'last_name' => ['sometimes', 'required', 'string', 'max:255'],
             'preferred_name' => ['nullable', 'string', 'max:255'],

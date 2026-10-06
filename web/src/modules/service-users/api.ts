@@ -5,6 +5,8 @@ import type { Paginated, ServiceUser, ServiceUserContact, ServiceUserContactType
 export interface ServiceUserInput {
   branch_id?: number | null;
   care_manager_id?: number | null;
+  /** The client's care team — replaces the whole list when sent. */
+  carer_ids?: number[];
   first_name: string;
   last_name: string;
   preferred_name?: string | null;

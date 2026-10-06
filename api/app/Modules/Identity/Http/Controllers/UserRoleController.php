@@ -10,6 +10,8 @@ use App\Modules\Identity\Http\Resources\UserRoleResource;
 use App\Modules\Identity\Support\AdministrationRoles;
 use App\Modules\Identity\Support\DefaultRoles;
 use App\Modules\Staff\Models\StaffProfile;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -62,6 +64,8 @@ class UserRoleController extends Controller
             return $user;
         });
 
+        AssignmentNotifier::notify($user, AssignmentMessages::role($request->validated('role'), true));
+
         return (new UserRoleResource($user->load(['roles', 'staffProfile'])))
             ->response()
             ->setStatusCode(201);
@@ -79,7 +83,12 @@ class UserRoleController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->firstOrFail();
 
+        $hadRole = $user->hasRole($role);
         $user->syncRoles([$role]);
+
+        if (! $hadRole) {
+            AssignmentNotifier::notify($user, AssignmentMessages::role($role->name, false));
+        }
 
         return new UserRoleResource($user->fresh()->load(['roles', 'staffProfile']));
     }

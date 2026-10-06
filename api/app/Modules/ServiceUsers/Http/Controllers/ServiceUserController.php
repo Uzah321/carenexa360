@@ -7,7 +7,10 @@ use App\Modules\ServiceUsers\Http\Requests\StoreServiceUserRequest;
 use App\Modules\ServiceUsers\Http\Requests\UpdateServiceUserRequest;
 use App\Modules\ServiceUsers\Http\Resources\ServiceUserResource;
 use App\Modules\ServiceUsers\Models\ServiceUser;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class ServiceUserController extends Controller
 {
@@ -48,10 +51,16 @@ class ServiceUserController extends Controller
 
     public function store(StoreServiceUserRequest $request)
     {
+        $attributes = $request->validated();
+        $carerIds = Arr::pull($attributes, 'carer_ids');
+
         $serviceUser = ServiceUser::create([
-            ...$request->validated(),
+            ...$attributes,
             'tenant_id' => $request->user()->tenant_id,
         ]);
+
+        AssignmentNotifier::notify($serviceUser->care_manager_id, AssignmentMessages::careManager($serviceUser));
+        $this->syncCarers($serviceUser, $carerIds);
 
         return (new ServiceUserResource($serviceUser->fresh()->load('carers')))
             ->response()
@@ -70,9 +79,37 @@ class ServiceUserController extends Controller
 
     public function update(UpdateServiceUserRequest $request, ServiceUser $serviceUser)
     {
-        $serviceUser->update($request->validated());
+        $attributes = $request->validated();
+        $carerIds = Arr::pull($attributes, 'carer_ids');
+
+        $previousManager = $serviceUser->care_manager_id;
+        $serviceUser->update($attributes);
+
+        AssignmentNotifier::notifyIfChanged($previousManager, $serviceUser->care_manager_id, AssignmentMessages::careManager($serviceUser));
+        $this->syncCarers($serviceUser, $carerIds);
 
         return new ServiceUserResource($serviceUser->fresh()->load('carers'));
+    }
+
+    /**
+     * Replaces the client's care team with exactly these carers (null = not
+     * sent, leave it alone) and emails only the ones newly added — carers
+     * already on the team, or removed from it, hear nothing.
+     */
+    protected function syncCarers(ServiceUser $serviceUser, ?array $carerIds): void
+    {
+        if ($carerIds === null) {
+            return;
+        }
+
+        $changes = $serviceUser->carers()->syncWithPivotValues(
+            array_map('intval', $carerIds),
+            ['tenant_id' => $serviceUser->tenant_id],
+        );
+
+        foreach ($changes['attached'] as $carerId) {
+            AssignmentNotifier::notify((int) $carerId, AssignmentMessages::carer($serviceUser));
+        }
     }
 
     public function destroy(Request $request, ServiceUser $serviceUser)

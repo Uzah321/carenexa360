@@ -8,6 +8,8 @@ use App\Modules\Rostering\Http\Requests\UpdateShiftRequest;
 use App\Modules\Rostering\Http\Resources\ShiftResource;
 use App\Modules\Rostering\Models\Shift;
 use App\Modules\Rostering\Support\RosteringRoles;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use App\Support\Scheduling\ScheduleOverlap;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -46,6 +48,8 @@ class ShiftController extends Controller
             ...$request->validated(),
             'tenant_id' => $tenantId,
         ]);
+
+        AssignmentNotifier::notify($shift->user_id, AssignmentMessages::shift($shift));
 
         return (new ShiftResource($shift->load('user')))
             ->response()

@@ -25,6 +25,14 @@ class StoreServiceUserRequest extends FormRequest
                 'integer',
                 Rule::exists('users', 'id')->where('tenant_id', $this->user()->tenant_id),
             ],
+            // The client's care team — staff only (anyone with a staff profile
+            // in this tenant), never family-portal accounts.
+            'carer_ids' => ['sometimes', 'array'],
+            'carer_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('staff_profiles', 'user_id')->where('tenant_id', $this->user()->tenant_id),
+            ],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'preferred_name' => ['nullable', 'string', 'max:255'],

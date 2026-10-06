@@ -8,6 +8,8 @@ use App\Modules\CarePlanning\Http\Resources\CarePlanResource;
 use App\Modules\CarePlanning\Models\CarePlan;
 use App\Modules\CarePlanning\Support\HomeCarePlan;
 use App\Modules\ServiceUsers\Models\ServiceUser;
+use App\Notifications\AssignmentMessages;
+use App\Support\AssignmentNotifier;
 use App\Support\RichText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +33,8 @@ class CarePlanController extends Controller
 
     public function store(StoreCarePlanRequest $request, ServiceUser $serviceUser)
     {
+        $previousPlan = $serviceUser->carePlans()->where('status', 'active')->with(['sections', 'riskAssessments'])->first();
+
         $carePlan = DB::transaction(function () use ($request, $serviceUser) {
             $serviceUser->carePlans()
                 ->where('status', 'active')
@@ -77,7 +81,39 @@ class CarePlanController extends Controller
             return $carePlan;
         });
 
+        $this->notifyNewResponsibilities($serviceUser, $previousPlan, $carePlan->load(['sections', 'riskAssessments']));
+
         return new CarePlanResource($carePlan->load(['sections', 'riskAssessments', 'createdBy']));
+    }
+
+    /**
+     * Every save is a whole new version, so "assigned" means given an area
+     * or risk this version that they didn't already hold on the last one —
+     * otherwise each unrelated edit would re-email everyone on the plan.
+     * One email per person, listing all of it.
+     */
+    protected function notifyNewResponsibilities(ServiceUser $serviceUser, ?CarePlan $previous, CarePlan $current): void
+    {
+        $held = collect([
+            ...($previous?->sections ?? collect())->map(fn ($s) => "section|{$s->area}|{$s->responsible_staff_id}"),
+            ...($previous?->riskAssessments ?? collect())->map(fn ($r) => "risk|{$r->hazard}|{$r->action_owner_id}"),
+        ])->flip();
+
+        $newSections = $current->sections
+            ->filter(fn ($s) => $s->responsible_staff_id && ! $held->has("section|{$s->area}|{$s->responsible_staff_id}"))
+            ->groupBy('responsible_staff_id');
+        $newRisks = $current->riskAssessments
+            ->filter(fn ($r) => $r->action_owner_id && ! $held->has("risk|{$r->hazard}|{$r->action_owner_id}"))
+            ->groupBy('action_owner_id');
+
+        foreach ($newSections->keys()->merge($newRisks->keys())->unique() as $userId) {
+            AssignmentNotifier::notify((int) $userId, AssignmentMessages::carePlan(
+                $serviceUser,
+                $current->version,
+                ($newSections[$userId] ?? collect())->all(),
+                ($newRisks[$userId] ?? collect())->all(),
+            ));
+        }
     }
 
     public function show(Request $request, CarePlan $carePlan)
