@@ -80,7 +80,17 @@ class UserRoleController extends Controller
         // under the wrong team id. Force it to the target user's tenant.
         app(PermissionRegistrar::class)->setPermissionsTeamId($user->tenant_id);
 
-        $role = Role::where('name', $request->validated('role'))
+        // An admin demoting themselves can't undo it, and an Admin able to
+        // grant or strip Owner could take over the organisation — only an
+        // Owner (or platform admin) touches the Owner role.
+        $actor = $request->user();
+        abort_if($actor->is($user), 422, 'You cannot change your own role.');
+        if (! $actor->isPlatformAdmin()
+            && ($user->hasRole('Organization Owner') || $request->validated('role') === 'Organization Owner')) {
+            abort_unless($actor->hasRole('Organization Owner'), 403, 'Only an Organization Owner can give or remove the Owner role.');
+        }
+
+        $role =Role::where('name', $request->validated('role'))
             ->where('tenant_id', $user->tenant_id)
             ->firstOrFail();
 

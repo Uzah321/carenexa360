@@ -114,4 +114,35 @@ class UserRoleTest extends TestCase
             ->patchJson("/api/v1/user-roles/{$carerA->id}", ['role' => 'Organization Admin'])
             ->assertForbidden();
     }
+
+    public function test_nobody_can_change_their_own_role(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $owner = $this->makeOwner($tenant);
+
+        $this->actingAs($owner)
+            ->patchJson("/api/v1/user-roles/{$owner->id}", ['role' => 'Carer / Support Worker'])
+            ->assertStatus(422);
+    }
+
+    public function test_an_admin_cannot_grant_or_remove_the_owner_role(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $owner = $this->makeOwner($tenant);
+        $admin = $this->makeStaffWithRole($tenant, 'Organization Admin');
+        $carer = $this->makeStaffWithRole($tenant, 'Carer / Support Worker');
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/user-roles/{$carer->id}", ['role' => 'Organization Owner'])
+            ->assertForbidden();
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/user-roles/{$owner->id}", ['role' => 'Carer / Support Worker'])
+            ->assertForbidden();
+
+        // An Admin can still change any other role.
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/user-roles/{$carer->id}", ['role' => 'Senior Carer'])
+            ->assertOk()
+            ->assertJsonPath('data.role', 'Senior Carer');
+    }
 }

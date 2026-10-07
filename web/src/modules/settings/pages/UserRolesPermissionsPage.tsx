@@ -121,6 +121,7 @@ function ChangeRoleModal({
   onClose: () => void;
 }) {
   const updateRole = useUpdateUserRole();
+  const isOwner = useAuth().hasAnyRole(["Organization Owner"]);
   const [role, setRole] = useState(target.role ?? STAFF_ASSIGNABLE_ROLES[0]);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,7 +158,7 @@ function ChangeRoleModal({
       )}
       <FormField label="Role" htmlFor="change-role-select">
         <Select id="change-role-select" value={role} onChange={(e) => setRole(e.target.value)}>
-          {STAFF_ASSIGNABLE_ROLES.map((r) => (
+          {STAFF_ASSIGNABLE_ROLES.filter((r) => isOwner || r !== "Organization Owner").map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
@@ -228,8 +229,13 @@ export function UserRolesPermissionsPage() {
       render: (row) => {
         // You can't lock yourself out — the API refuses it as well.
         const isSelf = row.id === user?.id;
+        const isOwnerRow = row.role === "Organization Owner";
         const actions: RowAction[] = [
-          { label: "Change role", onClick: () => setEditTarget(row) },
+          {
+            label: "Change role",
+            onClick: () => setEditTarget(row),
+            hidden: isSelf || (isOwnerRow && !hasAnyRole(["Organization Owner"])),
+          },
           {
             label: "Reactivate",
             onClick: () => setUserActive.mutate({ id: row.id, active: true }),

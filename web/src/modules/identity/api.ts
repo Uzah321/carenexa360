@@ -21,6 +21,7 @@ export function useUpdateUserRole() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+      void queryClient.invalidateQueries({ queryKey: ["staff"] });
     },
   });
 }

@@ -31,9 +31,10 @@ import {
   type CreateStaffInput,
   type UpdateStaffInput,
 } from "../api";
-import { ADMINISTRATION_ROLES, TENANT_ROLES, type StaffMember } from "../../../lib/types";
+import { ADMINISTRATION_ROLES, STAFF_ASSIGNABLE_ROLES, TENANT_ROLES, type StaffMember } from "../../../lib/types";
 import { tenantSettings } from "../../../lib/preferences";
 import { LocationSelect } from "../../organization/components/LocationSelect";
+import { useUpdateUserRole } from "../../identity/api";
 
 function StaffDetailDrawer({ staff }: { staff: StaffMember }) {
   const updateStaff = useUpdateStaff(staff.id);
@@ -185,6 +186,10 @@ export function StaffPage() {
   const [editForm, setEditForm] = useState<UpdateStaffInput>(EMPTY_EDIT_FORM);
   const [editError, setEditError] = useState<string | null>(null);
   const updateStaff = useUpdateStaff(editingStaff?.id ?? 0);
+  // The role lives on the sign-in account, not the staff profile, so it's
+  // saved through User Roles & Permissions' endpoint alongside the profile.
+  const updateRole = useUpdateUserRole();
+  const [editRole, setEditRole] = useState("");
 
   // Deactivating (blocks sign-in) and deleting an account is an
   // Organization Owner/Admin decision — the API enforces it; this just
@@ -211,19 +216,33 @@ export function StaffPage() {
   function openEdit(staff: StaffMember) {
     setEditingStaff(staff);
     setEditForm(staffToEditForm(staff));
+    setEditRole(staff.roles[0] ?? "");
     setEditError(null);
   }
 
   async function handleEdit(event: FormEvent) {
     event.preventDefault();
+    if (!editingStaff) return;
     setEditError(null);
     try {
       await updateStaff.mutateAsync(editForm);
+      if (canChangeRole(editingStaff) && editRole && editRole !== editingStaff.roles[0]) {
+        await updateRole.mutateAsync({ id: editingStaff.user_id, role: editRole });
+      }
       setEditingStaff(null);
     } catch (err) {
       setEditError(apiErrorMessage(err, "Could not save these changes. Please try again."));
     }
   }
+
+  // Only an Owner/Admin assigns roles, nobody changes their own (the API
+  // refuses both), and only an Owner can hand out or take away Owner.
+  const isOwner = hasAnyRole(["Organization Owner"]);
+  function canChangeRole(staff: StaffMember) {
+    return isAdmin && staff.user_id !== user?.id && (isOwner || !staff.roles.includes("Organization Owner"));
+  }
+  const roleOptions = STAFF_ASSIGNABLE_ROLES.filter((role) => isOwner || role !== "Organization Owner");
+
 
   async function handleConfirmAction() {
     if (!pendingAction) return;
@@ -428,7 +447,7 @@ export function StaffPage() {
             <Button variant="secondary" onClick={() => setEditingStaff(null)}>
               Cancel
             </Button>
-            <Button form="edit-staff-form" type="submit" isLoading={updateStaff.isPending}>
+            <Button form="edit-staff-form" type="submit" isLoading={updateStaff.isPending || updateRole.isPending}>
               Save
             </Button>
           </>
@@ -439,6 +458,18 @@ export function StaffPage() {
             <div className="mb-4">
               <Alert tone="danger">{editError}</Alert>
             </div>
+          )}
+          {editingStaff && canChangeRole(editingStaff) && (
+            <FormField label="Role" htmlFor="edit-staff-role">
+              <Select id="edit-staff-role" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                {!editRole && <option value="">No role</option>}
+                {roleOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
           )}
           <FormField label="Location" htmlFor="edit-staff-location">
             <LocationSelect id="edit-staff-location" value={editForm.branch_id} onChange={(branch_id) => setEditForm({ ...editForm, branch_id })} />
