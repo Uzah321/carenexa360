@@ -97,6 +97,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('/{serviceUser}', [ServiceUserController::class, 'show']);
                 Route::patch('/{serviceUser}', [ServiceUserController::class, 'update']);
                 Route::delete('/{serviceUser}', [ServiceUserController::class, 'destroy']);
+                Route::patch('/{serviceUser}/deactivate', [ServiceUserController::class, 'deactivate']);
+                Route::patch('/{serviceUser}/reactivate', [ServiceUserController::class, 'reactivate']);
 
                 Route::get('/{serviceUser}/contacts', [ServiceUserContactController::class, 'index']);
                 Route::post('/{serviceUser}/contacts', [ServiceUserContactController::class, 'store']);
@@ -193,6 +195,9 @@ Route::prefix('v1')->group(function () {
                 Route::post('/', [StaffController::class, 'store']);
                 Route::get('/{staff}', [StaffController::class, 'show']);
                 Route::patch('/{staff}', [StaffController::class, 'update']);
+                Route::delete('/{staff}', [StaffController::class, 'destroy']);
+                Route::patch('/{staff}/deactivate', [StaffController::class, 'deactivate']);
+                Route::patch('/{staff}/reactivate', [StaffController::class, 'reactivate']);
 
                 Route::get('/{staff}/documents', [StaffDocumentController::class, 'index']);
                 Route::post('/{staff}/documents', [StaffDocumentController::class, 'store']);
@@ -202,6 +207,9 @@ Route::prefix('v1')->group(function () {
                 Route::get('/', [UserRoleController::class, 'index']);
                 Route::post('/', [UserRoleController::class, 'store']);
                 Route::patch('/{user}', [UserRoleController::class, 'update']);
+                Route::delete('/{user}', [UserRoleController::class, 'destroy']);
+                Route::patch('/{user}/deactivate', [UserRoleController::class, 'deactivate']);
+                Route::patch('/{user}/reactivate', [UserRoleController::class, 'reactivate']);
             });
 
             Route::prefix('funders')->group(function () {

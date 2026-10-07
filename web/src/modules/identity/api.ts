@@ -44,3 +44,33 @@ export function useCreateUserRole() {
     },
   });
 }
+
+/** Deactivate blocks sign-in until reactivated; delete removes the account. */
+export function useSetUserActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
+      const { data } = await apiClient.patch<{ data: UserRoleAssignment }>(
+        `/user-roles/${id}/${active ? "reactivate" : "deactivate"}`,
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+      void queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await apiClient.delete(`/user-roles/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+      void queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
+  });
+}

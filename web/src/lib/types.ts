@@ -485,6 +485,7 @@ export interface UserRoleAssignment {
   id: number;
   name: string;
   email: string;
+  status: "active" | "inactive";
   job_title: string | null;
   role: string | null;
 }

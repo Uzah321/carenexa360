@@ -3,6 +3,7 @@
 namespace App\Modules\ServiceUsers\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Identity\Support\AdministrationRoles;
 use App\Modules\ServiceUsers\Http\Requests\StoreServiceUserRequest;
 use App\Modules\ServiceUsers\Http\Requests\UpdateServiceUserRequest;
 use App\Modules\ServiceUsers\Http\Resources\ServiceUserResource;
@@ -11,6 +12,8 @@ use App\Notifications\AssignmentMessages;
 use App\Support\AssignmentNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ServiceUserController extends Controller
 {
@@ -112,17 +115,55 @@ class ServiceUserController extends Controller
         }
     }
 
+    /**
+     * Stops the client appearing as active (scheduling, Today, reports)
+     * while keeping their whole record — the reversible alternative to
+     * destroy() below.
+     */
+    public function deactivate(Request $request, ServiceUser $serviceUser)
+    {
+        $this->authorizeAdministration($request, $serviceUser);
+
+        $serviceUser->update(['status' => 'inactive']);
+
+        return new ServiceUserResource($serviceUser->fresh()->load('carers'));
+    }
+
+    public function reactivate(Request $request, ServiceUser $serviceUser)
+    {
+        $this->authorizeAdministration($request, $serviceUser);
+
+        $serviceUser->update(['status' => 'active']);
+
+        return new ServiceUserResource($serviceUser->fresh()->load('carers'));
+    }
+
+    /**
+     * Permanent — there is no archive to restore from. The database cascades
+     * the client's own records (care plans, notes, MAR, observations,
+     * visits…); incidents and safeguarding cases are organisational records
+     * and keep their row with the client link cleared. Their uploaded files
+     * are removed from storage here, since a database cascade can't do that.
+     */
     public function destroy(Request $request, ServiceUser $serviceUser)
     {
-        abort_unless(
-            $request->user()->isPlatformAdmin() || $request->user()->tenant_id === $serviceUser->tenant_id,
-            403
-        );
+        $this->authorizeAdministration($request, $serviceUser);
 
-        // Soft delete (the model uses SoftDeletes) — the record and its
-        // history are preserved, just excluded from default queries.
-        $serviceUser->delete();
+        DB::transaction(function () use ($serviceUser) {
+            foreach ($serviceUser->documents as $document) {
+                Storage::disk('local')->delete($document->path);
+                $document->delete();
+            }
+
+            $serviceUser->forceDelete();
+        });
 
         return response()->noContent();
+    }
+
+    protected function authorizeAdministration(Request $request, ServiceUser $serviceUser): void
+    {
+        abort_unless($request->user()->hasAnyRole(AdministrationRoles::ALLOWED), 403);
+        abort_unless($request->user()->ownsTenant($serviceUser->tenant_id), 403);
     }
 }

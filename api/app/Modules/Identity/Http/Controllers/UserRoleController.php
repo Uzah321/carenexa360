@@ -9,6 +9,7 @@ use App\Modules\Identity\Http\Requests\UpdateUserRoleRequest;
 use App\Modules\Identity\Http\Resources\UserRoleResource;
 use App\Modules\Identity\Support\AdministrationRoles;
 use App\Modules\Identity\Support\DefaultRoles;
+use App\Modules\Identity\Support\UserAccounts;
 use App\Modules\Staff\Models\StaffProfile;
 use App\Notifications\AssignmentMessages;
 use App\Support\AssignmentNotifier;
@@ -91,5 +92,29 @@ class UserRoleController extends Controller
         }
 
         return new UserRoleResource($user->fresh()->load(['roles', 'staffProfile']));
+    }
+
+    public function deactivate(Request $request, User $user)
+    {
+        UserAccounts::authorize($request->user(), $user);
+        UserAccounts::deactivate($user);
+
+        return new UserRoleResource($user->fresh()->load(['roles', 'staffProfile']));
+    }
+
+    public function reactivate(Request $request, User $user)
+    {
+        UserAccounts::authorize($request->user(), $user);
+        UserAccounts::reactivate($user);
+
+        return new UserRoleResource($user->fresh()->load(['roles', 'staffProfile']));
+    }
+
+    public function destroy(Request $request, User $user)
+    {
+        UserAccounts::authorize($request->user(), $user);
+        UserAccounts::delete($user);
+
+        return response()->noContent();
     }
 }

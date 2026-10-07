@@ -50,19 +50,6 @@ export interface UpdateStaffInput {
   hourly_rate?: number | null;
 }
 
-export function useUpdateStaffStatus() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, employment_status }: { id: number; employment_status: StaffMember["employment_status"] }) => {
-      const { data } = await apiClient.patch<{ data: StaffMember }>(`/staff/${id}`, { employment_status });
-      return data.data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["staff"] });
-    },
-  });
-}
-
 export function useUpdateStaff(staffId: number) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -72,6 +59,36 @@ export function useUpdateStaff(staffId: number) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
+  });
+}
+
+/** Deactivate blocks the staff member's sign-in until reactivated. */
+export function useSetStaffActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
+      const { data } = await apiClient.patch<{ data: StaffMember }>(
+        `/staff/${id}/${active ? "reactivate" : "deactivate"}`,
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["staff"] });
+      void queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+    },
+  });
+}
+
+export function useDeleteStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await apiClient.delete(`/staff/${id}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["staff"] });
+      void queryClient.invalidateQueries({ queryKey: ["user-roles"] });
     },
   });
 }

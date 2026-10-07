@@ -101,6 +101,18 @@ class AuthController extends Controller
             ]);
         }
 
+        // Deactivated from Staff or User Roles & Permissions (see
+        // UserAccounts::deactivate) — the password is still right, the
+        // account just isn't allowed in until an admin reactivates it.
+        if ($user->status === 'inactive') {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+
+            throw ValidationException::withMessages([
+                'email' => ['This account has been deactivated. Contact your administrator.'],
+            ]);
+        }
+
         // A 2FA-enabled account doesn't get a session yet — Auth::attempt()
         // above already established one, so undo that (without invalidating
         // the session itself, unlike the suspended-tenant branch above: the

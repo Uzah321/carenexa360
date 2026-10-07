@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Organization\Models\Tenant;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class ServiceUserTest extends TestCase
@@ -118,42 +120,75 @@ class ServiceUserTest extends TestCase
             ->assertJsonPath('data.0.name', 'Mary Smith');
     }
 
-    public function test_tenant_user_can_archive_a_service_user(): void
+    protected function makeAdmin(Tenant $tenant, string $roleName = 'Organization Admin'): User
+    {
+        $user = User::factory()->create(['tenant_id' => $tenant->id]);
+        app(PermissionRegistrar::class)->setPermissionsTeamId($tenant->id);
+        $user->assignRole(Role::where(['name' => $roleName, 'tenant_id' => $tenant->id])->firstOrFail());
+
+        return $user;
+    }
+
+    public function test_an_admin_can_deactivate_and_reactivate_a_service_user(): void
     {
         $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
-        $user = User::factory()->create(['tenant_id' => $tenant->id]);
-        $serviceUser = ServiceUser::create([
-            'tenant_id' => $tenant->id,
-            'first_name' => 'John',
-            'last_name' => 'Smith',
-        ]);
+        $admin = $this->makeAdmin($tenant);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
 
-        $this->actingAs($user)
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/service-users/{$serviceUser->id}/deactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'inactive');
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/service-users/{$serviceUser->id}/reactivate")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+    }
+
+    public function test_an_admin_can_permanently_delete_a_service_user(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $admin = $this->makeAdmin($tenant);
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
+
+        $this->actingAs($admin)
             ->deleteJson("/api/v1/service-users/{$serviceUser->id}")
             ->assertNoContent();
 
-        // Soft deleted, not gone — excluded from the default index/show
-        // queries but the row and its history are still in the database.
-        $this->assertSoftDeleted($serviceUser);
-        $this->actingAs($user)
-            ->getJson('/api/v1/service-users')
-            ->assertOk()
-            ->assertJsonCount(0, 'data');
+        // Gone, not archived — there's no soft-deleted row left behind.
+        $this->assertDatabaseMissing('service_users', ['id' => $serviceUser->id]);
     }
 
-    public function test_tenant_user_cannot_archive_another_tenants_service_user(): void
+    public function test_a_non_admin_cannot_deactivate_or_delete_a_service_user(): void
+    {
+        $tenant = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
+        $carer = $this->makeAdmin($tenant, 'Carer / Support Worker');
+        $serviceUser = ServiceUser::create(['tenant_id' => $tenant->id, 'first_name' => 'John', 'last_name' => 'Smith']);
+
+        $this->actingAs($carer)
+            ->patchJson("/api/v1/service-users/{$serviceUser->id}/deactivate")
+            ->assertForbidden();
+        $this->actingAs($carer)
+            ->deleteJson("/api/v1/service-users/{$serviceUser->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('service_users', ['id' => $serviceUser->id, 'status' => 'active']);
+    }
+
+    public function test_an_admin_cannot_delete_another_tenants_service_user(): void
     {
         $tenantA = Tenant::create(['name' => 'Tenant A', 'slug' => 'tenant-a', 'country' => 'Zimbabwe']);
         $tenantB = Tenant::create(['name' => 'Tenant B', 'slug' => 'tenant-b', 'country' => 'UK']);
 
-        $userA = User::factory()->create(['tenant_id' => $tenantA->id]);
+        $adminA = $this->makeAdmin($tenantA);
         $serviceUserB = ServiceUser::create([
             'tenant_id' => $tenantB->id,
             'first_name' => 'Jane',
             'last_name' => 'Doe',
         ]);
 
-        $this->actingAs($userA)
+        $this->actingAs($adminA)
             ->deleteJson("/api/v1/service-users/{$serviceUserB->id}")
             ->assertForbidden();
     }

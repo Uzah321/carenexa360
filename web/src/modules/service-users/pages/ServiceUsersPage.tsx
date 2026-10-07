@@ -19,16 +19,18 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { useAuth } from "../../../lib/auth-context";
 import { uploadServiceUserDocument } from "../../documents/api";
 import {
   useCreateServiceUser,
   useDeleteServiceUser,
   useServiceUsers,
+  useSetServiceUserActive,
   useUpdateServiceUser,
   useUpdateServiceUserStatus,
   type ServiceUserInput,
 } from "../api";
-import type { ServiceUser } from "../../../lib/types";
+import { ADMINISTRATION_ROLES, type ServiceUser } from "../../../lib/types";
 import { LocationSelect } from "../../organization/components/LocationSelect";
 
 const HOSPITAL_RECORD_CATEGORY = "Hospital Record";
@@ -96,9 +98,14 @@ export function ServiceUsersPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const updateServiceUser = useUpdateServiceUser(editingServiceUser?.id ?? 0);
 
-  const [archivingServiceUser, setArchivingServiceUser] = useState<ServiceUser | null>(null);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
+  // Deactivating and deleting a client is an Organization Owner/Admin
+  // decision — the API enforces it; this just hides what they can't use.
+  const { hasAnyRole } = useAuth();
+  const isAdmin = hasAnyRole(ADMINISTRATION_ROLES);
+  const [pendingAction, setPendingAction] = useState<{ kind: "deactivate" | "delete"; serviceUser: ServiceUser } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const deleteServiceUser = useDeleteServiceUser();
+  const setServiceUserActive = useSetServiceUserActive();
   const updateStatus = useUpdateServiceUserStatus();
 
   async function handleCreate(event: FormEvent) {
@@ -158,14 +165,19 @@ export function ServiceUsersPage() {
     }
   }
 
-  async function handleArchive() {
-    if (!archivingServiceUser) return;
-    setArchiveError(null);
+  async function handleConfirmAction() {
+    if (!pendingAction) return;
+    setActionError(null);
+    const { kind, serviceUser } = pendingAction;
     try {
-      await deleteServiceUser.mutateAsync(archivingServiceUser.id);
-      setArchivingServiceUser(null);
+      if (kind === "delete") {
+        await deleteServiceUser.mutateAsync(serviceUser.id);
+      } else {
+        await setServiceUserActive.mutateAsync({ id: serviceUser.id, active: false });
+      }
+      setPendingAction(null);
     } catch (err) {
-      setArchiveError(apiErrorMessage(err, "Could not archive this service user. Please try again."));
+      setActionError(apiErrorMessage(err, `Could not ${kind} this service user. Please try again.`));
     }
   }
 
@@ -204,14 +216,30 @@ export function ServiceUsersPage() {
             {
               label: "Mark as active",
               onClick: () => updateStatus.mutate({ id: row.id, status: "active" }),
-              hidden: row.status === "active",
+              hidden: row.status === "active" || (isAdmin && row.status === "inactive"),
             },
             {
               label: "Mark as discharged",
               onClick: () => updateStatus.mutate({ id: row.id, status: "discharged" }),
               hidden: row.status === "discharged",
             },
-            { label: "Archive", tone: "danger", onClick: () => setArchivingServiceUser(row) },
+            {
+              label: "Reactivate",
+              onClick: () => setServiceUserActive.mutate({ id: row.id, active: true }),
+              hidden: !isAdmin || row.status !== "inactive",
+            },
+            {
+              label: "Deactivate",
+              tone: "danger",
+              onClick: () => setPendingAction({ kind: "deactivate", serviceUser: row }),
+              hidden: !isAdmin || row.status === "inactive",
+            },
+            {
+              label: "Delete",
+              tone: "danger",
+              onClick: () => setPendingAction({ kind: "delete", serviceUser: row }),
+              hidden: !isAdmin,
+            },
           ]}
         />
       ),
@@ -519,17 +547,21 @@ export function ServiceUsersPage() {
       </Modal>
 
       <ConfirmDialog
-        isOpen={Boolean(archivingServiceUser)}
-        title="Archive service user"
-        message={`Archive ${archivingServiceUser?.first_name} ${archivingServiceUser?.last_name}? They'll be hidden from active lists but their records are preserved.`}
-        confirmLabel="Archive"
+        isOpen={Boolean(pendingAction)}
+        title={pendingAction?.kind === "delete" ? "Delete service user" : "Deactivate service user"}
+        message={
+          pendingAction?.kind === "delete"
+            ? `Permanently delete ${pendingAction.serviceUser.first_name} ${pendingAction.serviceUser.last_name}? Their care plans, notes, medication records, visits and documents will be deleted too. This cannot be undone.`
+            : `Deactivate ${pendingAction?.serviceUser.first_name} ${pendingAction?.serviceUser.last_name}? They'll be marked inactive and their records kept. You can reactivate them at any time.`
+        }
+        confirmLabel={pendingAction?.kind === "delete" ? "Delete permanently" : "Deactivate"}
         tone="danger"
-        isLoading={deleteServiceUser.isPending}
-        error={archiveError}
-        onConfirm={handleArchive}
+        isLoading={deleteServiceUser.isPending || setServiceUserActive.isPending}
+        error={actionError}
+        onConfirm={handleConfirmAction}
         onCancel={() => {
-          setArchivingServiceUser(null);
-          setArchiveError(null);
+          setPendingAction(null);
+          setActionError(null);
         }}
       />
     </div>

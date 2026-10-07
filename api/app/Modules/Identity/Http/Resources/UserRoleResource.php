@@ -13,6 +13,7 @@ class UserRoleResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'status' => $this->status,
             'job_title' => $this->whenLoaded('staffProfile', fn () => $this->staffProfile?->job_title),
             'role' => $this->getRoleNames()->first(),
         ];

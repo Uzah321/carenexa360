@@ -20,16 +20,18 @@ import {
   type Column,
 } from "../../../design-system";
 import { apiErrorMessage } from "../../../lib/api-error";
+import { useAuth } from "../../../lib/auth-context";
 import { downloadDocument, useStaffDocuments, useUploadStaffDocument } from "../../documents/api";
 import {
   useCreateStaff,
+  useDeleteStaff,
+  useSetStaffActive,
   useStaff,
   useUpdateStaff,
-  useUpdateStaffStatus,
   type CreateStaffInput,
   type UpdateStaffInput,
 } from "../api";
-import { TENANT_ROLES, type StaffMember } from "../../../lib/types";
+import { ADMINISTRATION_ROLES, TENANT_ROLES, type StaffMember } from "../../../lib/types";
 import { tenantSettings } from "../../../lib/preferences";
 import { LocationSelect } from "../../organization/components/LocationSelect";
 
@@ -183,10 +185,16 @@ export function StaffPage() {
   const [editForm, setEditForm] = useState<UpdateStaffInput>(EMPTY_EDIT_FORM);
   const [editError, setEditError] = useState<string | null>(null);
   const updateStaff = useUpdateStaff(editingStaff?.id ?? 0);
-  const updateStatus = useUpdateStaffStatus();
 
-  const [deactivatingStaff, setDeactivatingStaff] = useState<StaffMember | null>(null);
-  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  // Deactivating (blocks sign-in) and deleting an account is an
+  // Organization Owner/Admin decision — the API enforces it; this just
+  // hides what everyone else can't use.
+  const { user, hasAnyRole } = useAuth();
+  const isAdmin = hasAnyRole(ADMINISTRATION_ROLES);
+  const setStaffActive = useSetStaffActive();
+  const deleteStaff = useDeleteStaff();
+  const [pendingAction, setPendingAction] = useState<{ kind: "deactivate" | "delete"; staff: StaffMember } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -217,14 +225,19 @@ export function StaffPage() {
     }
   }
 
-  async function handleDeactivate() {
-    if (!deactivatingStaff) return;
-    setDeactivateError(null);
+  async function handleConfirmAction() {
+    if (!pendingAction) return;
+    setActionError(null);
+    const { kind, staff } = pendingAction;
     try {
-      await updateStatus.mutateAsync({ id: deactivatingStaff.id, employment_status: "inactive" });
-      setDeactivatingStaff(null);
+      if (kind === "delete") {
+        await deleteStaff.mutateAsync(staff.id);
+      } else {
+        await setStaffActive.mutateAsync({ id: staff.id, active: false });
+      }
+      setPendingAction(null);
     } catch (err) {
-      setDeactivateError(apiErrorMessage(err, "Could not deactivate this staff member. Please try again."));
+      setActionError(apiErrorMessage(err, `Could not ${kind} this staff member. Please try again.`));
     }
   }
 
@@ -251,14 +264,20 @@ export function StaffPage() {
             { label: "Rate & documents", onClick: () => setActiveStaff(row) },
             {
               label: "Reactivate",
-              onClick: () => updateStatus.mutate({ id: row.id, employment_status: "active" }),
-              hidden: row.employment_status !== "inactive",
+              onClick: () => setStaffActive.mutate({ id: row.id, active: true }),
+              hidden: !isAdmin || row.employment_status !== "inactive",
             },
             {
               label: "Deactivate",
               tone: "danger",
-              onClick: () => setDeactivatingStaff(row),
-              hidden: row.employment_status === "inactive",
+              onClick: () => setPendingAction({ kind: "deactivate", staff: row }),
+              hidden: !isAdmin || row.employment_status === "inactive" || row.user_id === user?.id,
+            },
+            {
+              label: "Delete",
+              tone: "danger",
+              onClick: () => setPendingAction({ kind: "delete", staff: row }),
+              hidden: !isAdmin || row.user_id === user?.id,
             },
           ]}
         />
@@ -476,17 +495,21 @@ export function StaffPage() {
       </Modal>
 
       <ConfirmDialog
-        isOpen={Boolean(deactivatingStaff)}
-        title="Deactivate staff member"
-        message={`Deactivate ${deactivatingStaff?.name}? They'll no longer appear as an option for scheduling until reactivated.`}
-        confirmLabel="Deactivate"
+        isOpen={Boolean(pendingAction)}
+        title={pendingAction?.kind === "delete" ? "Delete staff account" : "Deactivate staff account"}
+        message={
+          pendingAction?.kind === "delete"
+            ? `Permanently delete ${pendingAction.staff.name}'s account? They'll be signed out and removed from the staff list, along with their HR documents. Care records they wrote are kept. This cannot be undone.`
+            : `Deactivate ${pendingAction?.staff.name}? They'll be signed out, won't be able to log in, and won't appear for scheduling until reactivated.`
+        }
+        confirmLabel={pendingAction?.kind === "delete" ? "Delete permanently" : "Deactivate"}
         tone="danger"
-        isLoading={updateStatus.isPending}
-        error={deactivateError}
-        onConfirm={handleDeactivate}
+        isLoading={setStaffActive.isPending || deleteStaff.isPending}
+        error={actionError}
+        onConfirm={handleConfirmAction}
         onCancel={() => {
-          setDeactivatingStaff(null);
-          setDeactivateError(null);
+          setPendingAction(null);
+          setActionError(null);
         }}
       />
       <Suggestions id="job-title-options" items={tenantSettings().reference_data.job_titles} />

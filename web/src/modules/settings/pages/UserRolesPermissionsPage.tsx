@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardBody,
+  ConfirmDialog,
   DataTable,
   FormField,
   Input,
@@ -18,7 +19,14 @@ import {
 import { useAuth } from "../../../lib/auth-context";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { ADMINISTRATION_ROLES, STAFF_ASSIGNABLE_ROLES, type UserRoleAssignment } from "../../../lib/types";
-import { useCreateUserRole, useUpdateUserRole, useUserRoles, type CreateUserInput } from "../../identity/api";
+import {
+  useCreateUserRole,
+  useDeleteUser,
+  useSetUserActive,
+  useUpdateUserRole,
+  useUserRoles,
+  type CreateUserInput,
+} from "../../identity/api";
 
 const EMPTY_NEW_USER: CreateUserInput = { name: "", email: "", password: "", role: STAFF_ASSIGNABLE_ROLES[0] };
 
@@ -161,11 +169,31 @@ function ChangeRoleModal({
 }
 
 export function UserRolesPermissionsPage() {
-  const { hasAnyRole } = useAuth();
+  const { user, hasAnyRole } = useAuth();
   const isAuthorized = hasAnyRole(ADMINISTRATION_ROLES);
   const { data: users, isLoading } = useUserRoles();
   const [editTarget, setEditTarget] = useState<UserRoleAssignment | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const setUserActive = useSetUserActive();
+  const deleteUser = useDeleteUser();
+  const [pendingAction, setPendingAction] = useState<{ kind: "deactivate" | "delete"; target: UserRoleAssignment } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function handleConfirmAction() {
+    if (!pendingAction) return;
+    setActionError(null);
+    const { kind, target } = pendingAction;
+    try {
+      if (kind === "delete") {
+        await deleteUser.mutateAsync(target.id);
+      } else {
+        await setUserActive.mutateAsync({ id: target.id, active: false });
+      }
+      setPendingAction(null);
+    } catch (err) {
+      setActionError(apiErrorMessage(err, `Could not ${kind} this account. Please try again.`));
+    }
+  }
 
   if (!isAuthorized) {
     return (
@@ -187,11 +215,39 @@ export function UserRolesPermissionsPage() {
       render: (row) => (row.role ? <StatusBadge label={row.role} tone="neutral" /> : "—"),
     },
     {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <StatusBadge label={row.status} tone={row.status === "inactive" ? "neutral" : "success"} />
+      ),
+    },
+    {
       key: "actions",
       header: "",
       className: "text-right",
       render: (row) => {
-        const actions: RowAction[] = [{ label: "Change role", onClick: () => setEditTarget(row) }];
+        // You can't lock yourself out — the API refuses it as well.
+        const isSelf = row.id === user?.id;
+        const actions: RowAction[] = [
+          { label: "Change role", onClick: () => setEditTarget(row) },
+          {
+            label: "Reactivate",
+            onClick: () => setUserActive.mutate({ id: row.id, active: true }),
+            hidden: row.status !== "inactive",
+          },
+          {
+            label: "Deactivate",
+            tone: "danger",
+            onClick: () => setPendingAction({ kind: "deactivate", target: row }),
+            hidden: isSelf || row.status === "inactive",
+          },
+          {
+            label: "Delete",
+            tone: "danger",
+            onClick: () => setPendingAction({ kind: "delete", target: row }),
+            hidden: isSelf,
+          },
+        ];
         return <RowActionsMenu actions={actions} label={`${row.name} actions`} />;
       },
     },
@@ -209,6 +265,25 @@ export function UserRolesPermissionsPage() {
 
       {editTarget && <ChangeRoleModal target={editTarget} onClose={() => setEditTarget(null)} />}
       {isCreateOpen && <NewUserModal onClose={() => setIsCreateOpen(false)} />}
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingAction)}
+        title={pendingAction?.kind === "delete" ? "Delete account" : "Deactivate account"}
+        message={
+          pendingAction?.kind === "delete"
+            ? `Permanently delete ${pendingAction.target.name}'s account? They'll be signed out and removed from the system, along with their HR documents. Care records they wrote are kept. This cannot be undone.`
+            : `Deactivate ${pendingAction?.target.name}? They'll be signed out and won't be able to log in until reactivated.`
+        }
+        confirmLabel={pendingAction?.kind === "delete" ? "Delete permanently" : "Deactivate"}
+        tone="danger"
+        isLoading={setUserActive.isPending || deleteUser.isPending}
+        error={actionError}
+        onConfirm={handleConfirmAction}
+        onCancel={() => {
+          setPendingAction(null);
+          setActionError(null);
+        }}
+      />
     </div>
   );
 }

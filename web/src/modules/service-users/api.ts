@@ -123,6 +123,22 @@ export function useUpdateServiceUserStatus() {
   });
 }
 
+export function useSetServiceUserActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, active }: { id: number; active: boolean }) => {
+      const { data } = await apiClient.patch<{ data: ServiceUser }>(
+        `/service-users/${id}/${active ? "reactivate" : "deactivate"}`,
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-users"] });
+    },
+  });
+}
+
+/** Permanent — the client and their records are removed, not archived. */
 export function useDeleteServiceUser() {
   const queryClient = useQueryClient();
   return useMutation({

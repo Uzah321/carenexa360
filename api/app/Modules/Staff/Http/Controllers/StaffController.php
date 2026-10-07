@@ -4,6 +4,7 @@ namespace App\Modules\Staff\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Identity\Support\UserAccounts;
 use App\Modules\Staff\Http\Requests\StoreStaffRequest;
 use App\Modules\Staff\Http\Requests\UpdateStaffRequest;
 use App\Modules\Staff\Http\Resources\StaffResource;
@@ -90,5 +91,29 @@ class StaffController extends Controller
         $staff->update($request->validated());
 
         return new StaffResource($staff->fresh()->load('user'));
+    }
+
+    public function deactivate(Request $request, StaffProfile $staff)
+    {
+        UserAccounts::authorize($request->user(), $staff->user);
+        UserAccounts::deactivate($staff->user);
+
+        return new StaffResource($staff->fresh()->load('user'));
+    }
+
+    public function reactivate(Request $request, StaffProfile $staff)
+    {
+        UserAccounts::authorize($request->user(), $staff->user);
+        UserAccounts::reactivate($staff->user);
+
+        return new StaffResource($staff->fresh()->load('user'));
+    }
+
+    public function destroy(Request $request, StaffProfile $staff)
+    {
+        UserAccounts::authorize($request->user(), $staff->user);
+        UserAccounts::delete($staff->user);
+
+        return response()->noContent();
     }
 }

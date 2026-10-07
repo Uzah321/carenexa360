@@ -28,6 +28,17 @@ class EnforceSessionTimeout
         }
 
         $user = $request->user();
+
+        // UserAccounts::deactivate() already deletes the account's stored
+        // sessions; this catches any other session driver too.
+        if ($user?->status === 'inactive') {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json(['message' => 'This account has been deactivated.'], 401);
+        }
+
         $timeoutMinutes = (int) ($user?->tenant?->setting('session_timeout_minutes') ?? 0);
         $lastActivity = $request->session()->get('last_activity_at');
 
