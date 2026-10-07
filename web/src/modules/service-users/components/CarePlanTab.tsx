@@ -25,7 +25,7 @@ import {
   type CarePlanSectionInput,
 } from "../../care-planning/api";
 import { emptyRiskAssessmentInput, normalizeRiskAssessmentInput, toRiskAssessmentInput } from "../../care-planning/risk";
-import { downloadCarePlanWord, printCarePlan } from "../../care-planning/carePlanExport";
+import { downloadCarePlanWord, printCarePlan, type CarePlanExportScope } from "../../care-planning/carePlanExport";
 import { RiskAssessmentFormFields, RiskAssessmentList } from "./RiskAssessmentPanels";
 import { HomeCarePlanFormFields, HomeCarePlanView } from "./HomeCarePlanPanel";
 import { emptyHomeCarePlan } from "../../care-planning/homeCarePlan";
@@ -514,6 +514,24 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
     { key: "history", label: "History" },
   ];
 
+  // Print / Download cover the tab that's open — the Risk Assessment tab
+  // exports the risk assessment, not the whole care plan. Overview is the
+  // one tab that exports everything.
+  const exportScope: CarePlanExportScope = (() => {
+    switch (activeTab) {
+      case "home-care-plan":
+      case "risks":
+      case "medication-risk":
+      case "goals":
+      case "reviews":
+        return { kind: activeTab };
+      case "history":
+        return { kind: "history", plans: plans ?? [] };
+      default:
+        return areaTabs.some((t) => t.key === activeTab) ? { kind: "area", area: activeTab } : { kind: "full" };
+    }
+  })();
+
   const nextReviewDate = viewingPlan?.sections
     .map((s) => s.review_date)
     .filter((d): d is string => Boolean(d))
@@ -723,10 +741,10 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
         <div className="flex flex-wrap items-center gap-2">
           {viewingPlan && (
             <>
-              <Button variant="secondary" onClick={() => printCarePlan(viewingPlan, serviceUser)}>
+              <Button variant="secondary" onClick={() => printCarePlan(viewingPlan, serviceUser, exportScope)}>
                 Print / PDF
               </Button>
-              <Button variant="secondary" onClick={() => downloadCarePlanWord(viewingPlan, serviceUser)}>
+              <Button variant="secondary" onClick={() => downloadCarePlanWord(viewingPlan, serviceUser, exportScope)}>
                 Download Word
               </Button>
             </>

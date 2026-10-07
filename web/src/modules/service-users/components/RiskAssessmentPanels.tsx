@@ -56,62 +56,6 @@ export function RiskScoreBadge({ likelihood, severity }: { likelihood: number | 
   return <StatusBadge label={`${RISK_RATING_LABELS[rating]} · ${score}`} tone={RISK_RATING_TONE[rating]} />;
 }
 
-const MATRIX_CELL_CLASSES = {
-  low: "bg-limetint text-lime",
-  medium: "bg-ambertint text-amber",
-  high: "bg-coraltint text-coral",
-  very_high: "bg-coral text-white",
-} as const;
-
-// Plots each assessment at its current position — residual (after controls)
-// where scored, otherwise its initial score.
-function RiskMatrix({ assessments }: { assessments: CarePlanRiskAssessment[] }) {
-  const counts = new Map<string, number>();
-  for (const ra of assessments) {
-    const l = ra.residual_likelihood ?? ra.likelihood;
-    const s = ra.residual_severity ?? ra.severity;
-    if (l && s) counts.set(`${l}-${s}`, (counts.get(`${l}-${s}`) ?? 0) + 1);
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="border-separate border-spacing-1 text-xs" aria-label="Risk matrix">
-        <tbody>
-          {[...SCALE].reverse().map((l) => (
-            <tr key={l}>
-              <th scope="row" className="pr-2 text-right font-medium text-inksoft">
-                {LIKELIHOOD_LABELS[l]}
-              </th>
-              {SCALE.map((s) => {
-                const rating = riskRating(l * s) ?? "low";
-                const count = counts.get(`${l}-${s}`);
-                return (
-                  <td
-                    key={s}
-                    title={`Likelihood ${l} × Severity ${s} = ${l * s}`}
-                    className={`h-9 w-12 rounded-md text-center font-semibold ${MATRIX_CELL_CLASSES[rating]} ${count ? "ring-2 ring-ink/60" : "opacity-70"}`}
-                  >
-                    {count ?? ""}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          <tr>
-            <td />
-            {SCALE.map((s) => (
-              <th key={s} scope="col" className="pt-1 text-center font-medium text-inksoft">
-                {SEVERITY_LABELS[s]}
-              </th>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-      <p className="mt-1 text-xs text-inksoft">Rows: likelihood · Columns: severity · Numbers show how many risks sit in each cell after controls.</p>
-    </div>
-  );
-}
-
 function Field({ label, value }: { label: string; value: ReactNode }) {
   if (value === null || value === undefined || value === "") return null;
   return (
@@ -265,14 +209,6 @@ export function RiskAssessmentList({
           </Button>
         )}
       </div>
-
-      {ofType.length > 0 && (
-        <Card>
-          <CardBody>
-            <RiskMatrix assessments={ofType} />
-          </CardBody>
-        </Card>
-      )}
 
       {ofType.length === 0 ? (
         <EmptyState message={`No ${noun}s have been recorded on this care plan.`} />

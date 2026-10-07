@@ -191,11 +191,120 @@ const STYLES = `
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 `;
 
-export function buildCarePlanHtml(plan: CarePlan, serviceUser: ServiceUser | undefined): string {
+/**
+ * What an export covers — the tab the user is on when they press Print or
+ * Download. "full" is the whole care plan (the Overview tab); every other
+ * scope prints just that tab's content under the same header.
+ */
+export type CarePlanExportScope =
+  | { kind: "full" }
+  | { kind: "home-care-plan" }
+  | { kind: "area"; area: string }
+  | { kind: "risks" }
+  | { kind: "medication-risk" }
+  | { kind: "goals" }
+  | { kind: "reviews" }
+  | { kind: "history"; plans: CarePlan[] };
+
+const SCOPE_TITLES: Record<CarePlanExportScope["kind"], string> = {
+  full: "Care Plan",
+  "home-care-plan": "Home Care Plan",
+  area: "Care Plan",
+  risks: "Risk Assessment",
+  "medication-risk": "Medication Risk Assessment",
+  goals: "Care Plan Goals",
+  reviews: "Care Plan Reviews",
+  history: "Care Plan Version History",
+};
+
+function scopeTitle(scope: CarePlanExportScope): string {
+  return scope.kind === "area" ? `${areaLabel(scope.area)} Care Plan` : SCOPE_TITLES[scope.kind];
+}
+
+const RISK_SCORING_NOTE =
+  "<p>Risks are scored likelihood (1–5) × severity (1–5): 1–4 Low, 5–9 Medium, 10–16 High, 20–25 Very high.</p>";
+
+function generalRisksHtml(assessments: CarePlanRiskAssessment[]): string {
+  return assessments.length
+    ? `${RISK_SCORING_NOTE}${riskSummaryTable(assessments)}${assessments.map(riskAssessmentHtml).join("")}`
+    : "<p>No general risk assessments recorded.</p>";
+}
+
+function medicationRisksHtml(assessments: CarePlanRiskAssessment[]): string {
+  return assessments.length
+    ? `${RISK_SCORING_NOTE}${riskSummaryTable(assessments)}${assessments.map(riskAssessmentHtml).join("")}`
+    : "<p>No medication risk assessments recorded.</p>";
+}
+
+/** Mirrors the "Care plan area risk levels" table on the Risk Assessment tab. */
+function areaRiskLevelsHtml(sections: CarePlanSection[]): string {
+  const order: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const withRisk = sections.filter((s) => s.risk).sort((a, b) => (order[a.risk ?? ""] ?? 3) - (order[b.risk ?? ""] ?? 3));
+  if (withRisk.length === 0) return "";
+  const rows = withRisk
+    .map(
+      (s) => `<tr>
+        <td><b>${esc(areaLabel(s.area))}</b><br><small>${esc(s.identified_need)}</small></td>
+        <td><span class="rating ${esc(s.risk)}">${esc(s.risk?.toUpperCase())}</span></td>
+        <td>${multiline(s.equipment ? `${s.intervention} (${s.equipment})` : s.intervention)}</td>
+      </tr>`,
+    )
+    .join("");
+  return `<h3>Care plan area risk levels</h3><table class="grid"><thead><tr><th>Risk</th><th>Level</th><th>Control</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function goalsHtml(sections: CarePlanSection[]): string {
+  if (sections.length === 0) return "<p>No goals recorded.</p>";
+  const rows = sections.map((s) => `<tr><td>${esc(areaLabel(s.area))}</td><td>${multiline(s.goal)}</td></tr>`).join("");
+  return `<table class="grid"><thead><tr><th>Area</th><th>Goal / desired outcome</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function reviewsHtml(sections: CarePlanSection[]): string {
+  const withReview = sections
+    .filter((s) => s.review_date)
+    .sort((a, b) => (a.review_date ?? "").localeCompare(b.review_date ?? ""));
+  if (withReview.length === 0) return "<p>No review dates have been set on this care plan.</p>";
+  const today = todayIso();
+  const rows = withReview
+    .map((s) => {
+      const overdue = (s.review_date ?? "") < today;
+      return `<tr><td>${esc(areaLabel(s.area))}</td><td>${esc(s.review_date)}</td><td>${overdue ? '<span class="rating high">Overdue</span>' : "Due"}</td></tr>`;
+    })
+    .join("");
+  return `<table class="grid"><thead><tr><th>Area</th><th>Review date</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function historyHtml(plans: CarePlan[]): string {
+  const rows = [...plans]
+    .sort((a, b) => b.version - a.version)
+    .map(
+      (p) => `<tr><td>Version ${p.version}</td><td>${esc(p.effective_from)}</td><td>${p.status === "active" ? "Current" : "Archived"}</td><td>${esc(p.created_by_name ?? "—")}</td></tr>`,
+    )
+    .join("");
+  return `<table class="grid"><thead><tr><th>Version</th><th>Effective from</th><th>Status</th><th>Prepared by</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+const SIGNATURES_HTML = `
+  <h2>Agreement</h2>
+  <table class="grid signatures">
+    <thead><tr><th>Role</th><th>Name</th><th>Signature</th><th>Date</th></tr></thead>
+    <tbody>
+      <tr><td>Service user / representative</td><td></td><td></td><td></td></tr>
+      <tr><td>Assessor / care coordinator</td><td></td><td></td><td></td></tr>
+      <tr><td>Registered manager</td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>`;
+
+export function buildCarePlanHtml(
+  plan: CarePlan,
+  serviceUser: ServiceUser | undefined,
+  scope: CarePlanExportScope = { kind: "full" },
+): string {
   const name = serviceUser ? `${serviceUser.first_name} ${serviceUser.last_name}` : `Service user #${plan.service_user_id}`;
   const assessments = plan.risk_assessments ?? [];
   const general = assessments.filter((ra) => ra.type === "general");
   const medication = assessments.filter((ra) => ra.type === "medication");
+  const title = scopeTitle(scope);
 
   const profileRows = serviceUser
     ? [
@@ -210,23 +319,36 @@ export function buildCarePlanHtml(plan: CarePlan, serviceUser: ServiceUser | und
       ].join("")
     : row("Name", esc(name));
 
-  return `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8">
-<title>Care Plan — ${esc(name)} — v${plan.version}</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
-<style>${STYLES}</style>
-</head>
-<body>
-  <h1>Care Plan — ${esc(name)}</h1>
-  <p class="meta">
-    Version ${plan.version} · ${plan.status === "active" ? "Current" : "Archived"} · Effective from ${esc(plan.effective_from)}
-    ${plan.created_by_name ? ` · Prepared by ${esc(plan.created_by_name)}` : ""} · Printed ${esc(todayIso())}
-  </p>
+  const aboutHtml = `<h2>About the person</h2><table class="kv">${profileRows}</table>`;
 
-  <h2>About the person</h2>
-  <table class="kv">${profileRows}</table>
+  let body: string;
+  switch (scope.kind) {
+    case "home-care-plan":
+      body = `${aboutHtml}<h2>Home care plan</h2>${homeCarePlanHtml(plan.home_care_plan)}${SIGNATURES_HTML}`;
+      break;
+    case "area": {
+      const sections = plan.sections.filter((s) => s.area === scope.area);
+      body = `${aboutHtml}<h2>${esc(areaLabel(scope.area))}</h2>${sections.map(sectionHtml).join("") || "<p>No sections recorded.</p>"}${SIGNATURES_HTML}`;
+      break;
+    }
+    case "risks":
+      body = `${aboutHtml}<h2>Risk assessment and management</h2>${generalRisksHtml(general)}${areaRiskLevelsHtml(plan.sections)}${SIGNATURES_HTML}`;
+      break;
+    case "medication-risk":
+      body = `${aboutHtml}<h2>Medication risk assessment</h2>${medicationRisksHtml(medication)}${SIGNATURES_HTML}`;
+      break;
+    case "goals":
+      body = `<h2>Goals</h2>${goalsHtml(plan.sections)}`;
+      break;
+    case "reviews":
+      body = `<h2>Review dates</h2>${reviewsHtml(plan.sections)}`;
+      break;
+    case "history":
+      body = `<h2>Versions</h2>${historyHtml(scope.plans)}`;
+      break;
+    default:
+      body = `
+  ${aboutHtml}
   ${plan.notes ? `<h3>Plan notes</h3><p>${multiline(plan.notes)}</p>` : ""}
 
   <h2>Home care plan</h2>
@@ -236,37 +358,41 @@ export function buildCarePlanHtml(plan: CarePlan, serviceUser: ServiceUser | und
   ${plan.sections.map(sectionHtml).join("") || "<p>No sections recorded.</p>"}
 
   <h2>Risk assessment and management</h2>
-  ${
-    general.length
-      ? `<p>Risks are scored likelihood (1–5) × severity (1–5): 1–4 Low, 5–9 Medium, 10–16 High, 20–25 Very high.</p>
-         ${riskSummaryTable(general)}${general.map(riskAssessmentHtml).join("")}`
-      : "<p>No general risk assessments recorded.</p>"
-  }
+  ${generalRisksHtml(general)}
 
   <h2>Medication risk assessment</h2>
   ${medication.length ? `${riskSummaryTable(medication)}${medication.map(riskAssessmentHtml).join("")}` : "<p>No medication risk assessments recorded.</p>"}
+  ${SIGNATURES_HTML}`;
+  }
 
-  <h2>Agreement</h2>
-  <table class="grid signatures">
-    <thead><tr><th>Role</th><th>Name</th><th>Signature</th><th>Date</th></tr></thead>
-    <tbody>
-      <tr><td>Service user / representative</td><td></td><td></td><td></td></tr>
-      <tr><td>Assessor / care coordinator</td><td></td><td></td><td></td></tr>
-      <tr><td>Registered manager</td><td></td><td></td><td></td></tr>
-    </tbody>
-  </table>
+  return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>${esc(title)} — ${esc(name)} — v${plan.version}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>${STYLES}</style>
+</head>
+<body>
+  <h1>${esc(title)} — ${esc(name)}</h1>
+  <p class="meta">
+    ${scope.kind === "history" ? "" : `Care plan version ${plan.version} · ${plan.status === "active" ? "Current" : "Archived"} · Effective from ${esc(plan.effective_from)}`}
+    ${scope.kind !== "history" && plan.created_by_name ? ` · Prepared by ${esc(plan.created_by_name)}` : ""}${scope.kind === "history" ? "" : " · "}Printed ${esc(todayIso())}
+  </p>
+  ${body}
 </body>
 </html>`;
 }
 
-function fileBaseName(plan: CarePlan, serviceUser: ServiceUser | undefined): string {
+function fileBaseName(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope): string {
   const who = serviceUser ? `${serviceUser.first_name}-${serviceUser.last_name}` : `service-user-${plan.service_user_id}`;
-  return `care-plan-${who}-v${plan.version}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  const version = scope.kind === "history" ? "" : `-v${plan.version}`;
+  return `${scopeTitle(scope)}-${who}${version}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
 }
 
 // Prints via a hidden iframe so the app's own layout/CSS doesn't leak into
 // the document. The browser's print dialog offers "Save as PDF".
-export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefined): void {
+export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope = { kind: "full" }): void {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
@@ -280,10 +406,10 @@ export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefin
   }
 
   doc.open();
-  doc.write(buildCarePlanHtml(plan, serviceUser));
+  doc.write(buildCarePlanHtml(plan, serviceUser, scope));
   doc.close();
   // The print dialog's default filename comes from the document title.
-  doc.title = fileBaseName(plan, serviceUser);
+  doc.title = fileBaseName(plan, serviceUser, scope);
 
   const cleanup = () => setTimeout(() => iframe.remove(), 500);
   win.addEventListener("afterprint", cleanup, { once: true });
@@ -293,13 +419,17 @@ export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefin
   }, 50);
 }
 
-export function downloadCarePlanWord(plan: CarePlan, serviceUser: ServiceUser | undefined): void {
+export function downloadCarePlanWord(
+  plan: CarePlan,
+  serviceUser: ServiceUser | undefined,
+  scope: CarePlanExportScope = { kind: "full" },
+): void {
   // A leading BOM makes Word pick up UTF-8 rather than guessing the encoding.
-  const blob = new Blob(["﻿", buildCarePlanHtml(plan, serviceUser)], { type: "application/msword" });
+  const blob = new Blob(["\uFEFF", buildCarePlanHtml(plan, serviceUser, scope)], { type: "application/msword" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${fileBaseName(plan, serviceUser)}.doc`;
+  link.download = `${fileBaseName(plan, serviceUser, scope)}.doc`;
   document.body.appendChild(link);
   link.click();
   link.remove();
