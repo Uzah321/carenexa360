@@ -11,6 +11,9 @@ export const REFERENCE_LISTS = [
   "medication_routes",
   "medication_forms",
   "equipment",
+  "medical_conditions",
+  "allergens",
+  "vaccines",
 ] as const;
 export type ReferenceList = (typeof REFERENCE_LISTS)[number];
 
@@ -69,6 +72,20 @@ export const DEFAULT_SETTINGS: EffectiveTenantSettings = {
     medication_routes: ["Oral", "Topical", "Inhaled", "Transdermal patch", "Subcutaneous injection", "Eye drops", "Ear drops", "Nasal", "Rectal", "PEG"],
     medication_forms: ["Tablet", "Capsule", "Liquid", "Cream", "Ointment", "Inhaler", "Patch", "Drops", "Injection"],
     equipment: ["Walking frame", "Walking stick", "Wheelchair", "Hoist", "Slide sheet", "Commode", "Shower chair", "Pressure-relieving mattress", "Gait belt"],
+    medical_conditions: [
+      "Type 2 diabetes", "Type 1 diabetes", "Hypertension", "Atrial fibrillation", "Heart failure", "Coronary heart disease",
+      "Stroke", "Transient ischaemic attack (TIA)", "COPD", "Asthma", "Alzheimer's disease", "Vascular dementia",
+      "Parkinson's disease", "Multiple sclerosis", "Epilepsy", "Osteoarthritis", "Rheumatoid arthritis", "Osteoporosis",
+      "Chronic kidney disease", "Hypothyroidism", "Cancer", "Depression", "Anxiety", "Bipolar disorder", "Schizophrenia",
+    ],
+    allergens: [
+      "Penicillin", "Amoxicillin", "Aspirin", "Ibuprofen", "Codeine", "Morphine", "Trimethoprim", "Sulfonamides",
+      "Latex", "Sticking plasters", "Chlorhexidine", "Peanuts", "Tree nuts", "Shellfish", "Eggs", "Milk", "Wheat",
+      "Bee and wasp stings", "Pollen", "House dust mite", "Animal dander",
+    ],
+    vaccines: [
+      "Influenza (annual)", "COVID-19", "Pneumococcal", "Shingles", "RSV", "Tetanus, diphtheria and polio", "Hepatitis B",
+    ],
   },
 };
 
@@ -81,4 +98,7 @@ export const REFERENCE_LIST_LABELS: Record<ReferenceList, { label: string; usedF
   medication_routes: { label: "Medication routes", usedFor: "Offered when adding a medication." },
   medication_forms: { label: "Medication forms", usedFor: "Offered when adding a medication." },
   equipment: { label: "Equipment", usedFor: "Offered on care plan sections." },
+  medical_conditions: { label: "Medical conditions", usedFor: "Offered when recording conditions, mental health and family history." },
+  allergens: { label: "Allergens", usedFor: "Offered when recording a client's allergies." },
+  vaccines: { label: "Vaccines", usedFor: "Offered when recording a client's immunisations." },
 };

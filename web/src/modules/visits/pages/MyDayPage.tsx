@@ -7,6 +7,7 @@ import type { VisitStatus } from "../../../lib/types";
 import { useCheckInDuty, useCheckOutDuty, useCurrentDutyPeriod } from "../../tracking/api";
 import { useLocationSharing } from "../../tracking/useLocationSharing";
 import { useVisits } from "../api";
+import { ClientAlertBadges } from "../components/ClientAlerts";
 import { todayIso } from "../../../lib/dates";
 import { formatTime, getTenantPreferences } from "../../../lib/preferences";
 
@@ -174,6 +175,7 @@ export function MyDayPage() {
                 <StatusBadge label={visit.status.replaceAll("_", " ")} tone={STATUS_TONE[visit.status]} />
               </div>
               <div className="mt-1 text-sm text-inksoft">{visit.service_user_name ?? "—"}</div>
+              <ClientAlertBadges alerts={visit.client_alerts} />
               {visit.care_tasks.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {visit.care_tasks.map((task) => (

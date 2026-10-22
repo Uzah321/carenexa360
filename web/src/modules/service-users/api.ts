@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { Paginated, ServiceUser, ServiceUserContact, ServiceUserContactType } from "../../lib/types";
+import type {
+  Paginated,
+  ResuscitationStatus,
+  ServiceUser,
+  ServiceUserContact,
+  ServiceUserContactType,
+  SmokingStatus,
+} from "../../lib/types";
 
 export interface ServiceUserInput {
   branch_id?: number | null;
@@ -21,10 +28,14 @@ export interface ServiceUserInput {
   longitude?: number | null;
   funding_source?: string | null;
   status?: string;
-  allergies?: string[];
-  diagnoses?: string[];
-  medical_conditions?: string[];
-  disabilities?: string[];
+  // Allergies, diagnoses, conditions and disabilities aren't sent — the API
+  // builds them from the medical history (see modules/medical-history).
+  no_known_allergies?: boolean;
+  smoking_status?: SmokingStatus | null;
+  alcohol_intake?: string | null;
+  resuscitation_status?: ResuscitationStatus | null;
+  resuscitation_notes?: string | null;
+  medical_history_summary?: string | null;
   mobility_notes?: string | null;
   communication_needs?: string | null;
   dietary_needs?: string | null;

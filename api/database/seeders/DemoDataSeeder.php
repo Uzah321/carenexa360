@@ -14,6 +14,7 @@ use App\Modules\Communication\Models\Announcement;
 use App\Modules\Compliance\Models\ComplianceRequirement;
 use App\Modules\Hr\Models\LeaveRequest;
 use App\Modules\Incidents\Models\Incident;
+use App\Modules\MedicalHistory\Models\MedicalHistoryEntry;
 use App\Modules\Medications\Models\Medication;
 use App\Modules\Medications\Models\MedicationAdministration;
 use App\Modules\Observations\Models\ClinicalAlert;
@@ -196,57 +197,119 @@ class DemoDataSeeder extends Seeder
                 'first_name' => 'Ruth', 'last_name' => 'Chikafu', 'preferred_name' => 'Ruth', 'gender' => 'Female',
                 'dob' => '1938-03-14', 'phone' => '+263 77 123 4567', 'address' => '22 Baines Avenue, Harare', 'lat' => -17.8203, 'lng' => 31.0468,
                 'funding_source' => 'Local Authority', 'branch' => $this->harare, 'care_manager' => 'Care Manager', 'funder' => 1,
-                'allergies' => ['Penicillin'], 'diagnoses' => ['Osteoarthritis'], 'medical_conditions' => ['Type 2 Diabetes', 'Hypertension'],
-                'disabilities' => [], 'mobility_notes' => 'Uses a walking frame; requires standing assistance from bed to chair.',
+                'mobility_notes' => 'Uses a walking frame; requires standing assistance from bed to chair.',
                 'communication_needs' => null, 'dietary_needs' => 'Diabetic diet — low sugar.',
+                // Resuscitation not yet discussed — left as a gap to follow up.
+                'background' => [
+                    'smoking_status' => 'never', 'alcohol_intake' => 'None',
+                    'medical_history_summary' => 'Lives alone with daily visits. Type 2 diabetes managed with metformin and diet; blood pressure well controlled. Osteoarthritis in both knees limits walking — uses a frame. Fractured her left wrist in a fall at home in February 2024.',
+                ],
+                'history' => [
+                    ['category' => 'allergy', 'name' => 'Penicillin', 'allergy_type' => 'medication', 'severity' => 'severe', 'reaction' => 'Widespread rash and facial swelling.', 'notes' => 'Confirmed in her GP records.'],
+                    ['category' => 'condition', 'name' => 'Type 2 diabetes', 'started_on' => '2009-04-20', 'provider' => 'GP', 'notes' => 'Metformin twice daily and a low-sugar diet. Blood glucose checked before breakfast.'],
+                    ['category' => 'condition', 'name' => 'Hypertension', 'started_on' => '2012-08-03', 'provider' => 'GP', 'notes' => 'Amlodipine once daily.'],
+                    ['category' => 'condition', 'name' => 'Osteoarthritis (both knees)', 'started_on' => '2015-09-01', 'provider' => 'Orthopaedics, Parirenyatwa Hospital'],
+                    ['category' => 'procedure', 'name' => 'Cataract surgery (right eye)', 'started_on' => '2019-06-12', 'provider' => 'Parirenyatwa Hospital', 'notes' => 'Good recovery; wears reading glasses.'],
+                    ['category' => 'admission', 'name' => 'Fall at home — fractured left wrist', 'started_on' => '2024-02-03', 'ended_on' => '2024-02-08', 'provider' => 'Parirenyatwa Hospital', 'notes' => 'Wrist in plaster for six weeks. Falls risk assessment added to her care plan.'],
+                    ['category' => 'immunisation', 'name' => 'Influenza (annual)', 'started_on' => '2025-10-14', 'provider' => 'GP surgery'],
+                    ['category' => 'immunisation', 'name' => 'COVID-19', 'started_on' => '2025-10-14', 'provider' => 'GP surgery'],
+                    ['category' => 'family_history', 'name' => 'Type 2 diabetes', 'relationship' => 'Mother'],
+                ],
             ],
             [
                 'first_name' => 'Josiah', 'last_name' => 'Ndlovu', 'preferred_name' => null, 'gender' => 'Male',
                 'dob' => '1945-07-02', 'phone' => '+263 77 234 5678', 'address' => '9 Josiah Tongogara St, Harare', 'lat' => -17.8265, 'lng' => 31.0492,
                 'funding_source' => 'NHS Continuing Care', 'branch' => $this->harare, 'care_manager' => 'Care Manager', 'funder' => 0,
-                'allergies' => [], 'diagnoses' => ["Parkinson's Disease"], 'medical_conditions' => ["Parkinson's Disease"],
-                'disabilities' => ['Limited mobility'], 'mobility_notes' => 'Slow gait, fall risk — always use gait belt.',
+                'mobility_notes' => 'Slow gait, fall risk — always use gait belt.',
                 'communication_needs' => 'Soft speech, allow extra time to respond.', 'dietary_needs' => null,
+                'background' => [
+                    'no_known_allergies' => true, 'smoking_status' => 'former', 'alcohol_intake' => 'Occasional — a beer at weekends',
+                    'resuscitation_status' => 'dnacpr',
+                    'resuscitation_notes' => 'DNACPR agreed with Josiah and his son on 12 February 2025 and signed by his consultant. The original form is kept in the red folder by the front door.',
+                    'medical_history_summary' => "Parkinson's disease since 2017, with a slow, shuffling gait and soft speech; his medication is time-critical. Right hip replaced in 2022. Admitted with aspiration pneumonia in January 2025 — eats sitting fully upright, slowly.",
+                ],
+                'reviewed' => true,
+                'history' => [
+                    ['category' => 'condition', 'name' => "Parkinson's disease", 'started_on' => '2017-09-05', 'provider' => 'Neurology, Parirenyatwa Hospital', 'notes' => 'Co-careldopa four times a day — must be given on time.'],
+                    ['category' => 'mental_health', 'name' => 'Depression', 'status' => 'in_remission', 'started_on' => '2019-05-21', 'provider' => 'GP', 'notes' => 'Sertraline daily. Low mood can return in winter — tell the care manager if he becomes withdrawn.'],
+                    ['category' => 'disability', 'name' => 'Limited mobility', 'started_on' => '2021-01-01', 'notes' => 'Shuffling gait; use a gait belt for all transfers.'],
+                    ['category' => 'procedure', 'name' => 'Total hip replacement (right)', 'started_on' => '2022-05-18', 'provider' => 'Parirenyatwa Hospital'],
+                    ['category' => 'admission', 'name' => 'Aspiration pneumonia', 'started_on' => '2025-01-10', 'ended_on' => '2025-01-24', 'provider' => 'Parirenyatwa Hospital', 'notes' => 'Speech and language therapy review before discharge: soft diet, sit fully upright to eat.'],
+                    ['category' => 'immunisation', 'name' => 'Pneumococcal', 'started_on' => '2021-03-02', 'provider' => 'GP surgery'],
+                    ['category' => 'immunisation', 'name' => 'Influenza (annual)', 'started_on' => '2025-10-14', 'provider' => 'GP surgery'],
+                ],
             ],
             [
                 'first_name' => 'Agnes', 'last_name' => 'Moyo', 'preferred_name' => 'Aggie', 'gender' => 'Female',
                 'dob' => '1932-11-20', 'phone' => '+263 77 345 6789', 'address' => '5 Enterprise Road, Harare', 'lat' => -17.8014, 'lng' => 31.0912,
                 'funding_source' => 'Self-funded', 'branch' => $this->harare, 'care_manager' => 'Branch Manager', 'funder' => 2,
-                'allergies' => [], 'diagnoses' => ['Dementia (early stage)'], 'medical_conditions' => ['Dementia (early stage)'],
-                'disabilities' => [], 'mobility_notes' => null,
+                'mobility_notes' => null,
                 'communication_needs' => 'Use short, simple sentences.', 'dietary_needs' => null,
+                // Allergy status deliberately unrecorded — shows how an
+                // incomplete history is flagged.
+                'history' => [
+                    ['category' => 'condition', 'name' => "Alzheimer's disease (early stage)", 'started_on' => '2023-06-14', 'provider' => 'Memory clinic', 'notes' => 'Short-term memory loss; manages well with a steady routine and prompts.'],
+                    ['category' => 'condition', 'name' => 'Osteoporosis', 'started_on' => '2018-02-07', 'provider' => 'GP'],
+                    ['category' => 'immunisation', 'name' => 'Influenza (annual)', 'started_on' => '2025-10-20', 'provider' => 'GP surgery'],
+                ],
             ],
             [
                 'first_name' => 'Peter', 'last_name' => 'Sibanda', 'preferred_name' => null, 'gender' => 'Male',
                 'dob' => '1950-01-09', 'phone' => '+263 71 456 7890', 'address' => '31 Fort Street, Bulawayo', 'lat' => -20.1531, 'lng' => 28.5839,
                 'funding_source' => 'Local Authority', 'branch' => $this->bulawayo, 'care_manager' => 'Care Coordinator', 'funder' => 1,
-                'allergies' => ['Latex'], 'diagnoses' => ['Chronic Obstructive Pulmonary Disease'], 'medical_conditions' => ['COPD'],
-                'disabilities' => [], 'mobility_notes' => 'Breathless on exertion — pace all activity, keep inhaler within reach.',
+                'mobility_notes' => 'Breathless on exertion — pace all activity, keep inhaler within reach.',
                 'communication_needs' => null, 'dietary_needs' => null,
+                'background' => [
+                    'smoking_status' => 'former', 'alcohol_intake' => 'None since 2016',
+                    'resuscitation_status' => 'for_resuscitation',
+                    'resuscitation_notes' => 'Discussed with Peter in March 2026 — he wishes to be resuscitated.',
+                    'medical_history_summary' => 'COPD since 2016 after forty years of smoking; breathless on exertion and uses inhalers. One admission for a flare-up in August 2025.',
+                ],
+                'history' => [
+                    ['category' => 'allergy', 'name' => 'Latex', 'allergy_type' => 'environmental', 'severity' => 'moderate', 'reaction' => 'Itchy red rash where gloves touched the skin.', 'notes' => 'Carers must use nitrile gloves.'],
+                    ['category' => 'condition', 'name' => 'COPD', 'started_on' => '2016-02-11', 'provider' => 'Respiratory clinic, Mpilo Central Hospital', 'notes' => 'Salbutamol and tiotropium inhalers. Rescue pack kept at home.'],
+                    ['category' => 'admission', 'name' => 'Infective exacerbation of COPD', 'started_on' => '2025-08-02', 'ended_on' => '2025-08-09', 'provider' => 'Mpilo Central Hospital'],
+                    ['category' => 'immunisation', 'name' => 'Pneumococcal', 'started_on' => '2020-11-05', 'provider' => 'GP surgery'],
+                    ['category' => 'immunisation', 'name' => 'Influenza (annual)', 'started_on' => '2025-10-20', 'provider' => 'GP surgery'],
+                    ['category' => 'family_history', 'name' => 'Lung cancer', 'relationship' => 'Father'],
+                ],
             ],
             [
                 'first_name' => 'Faith', 'last_name' => 'Gumbo', 'preferred_name' => null, 'gender' => 'Female',
                 'dob' => '1960-05-28', 'phone' => '+263 77 567 8901', 'address' => '18 Second Street, Harare', 'lat' => -17.8298, 'lng' => 31.0413,
                 'funding_source' => 'NHS Continuing Care', 'branch' => $this->harare, 'care_manager' => 'Care Manager', 'funder' => 0,
-                'allergies' => [], 'diagnoses' => ['Stroke (2025)'], 'medical_conditions' => ['Stroke recovery'],
-                'disabilities' => ['Right-side weakness'], 'mobility_notes' => 'Right-side weakness following stroke; uses a wheelchair for longer distances.',
+                'mobility_notes' => 'Right-side weakness following stroke; uses a wheelchair for longer distances.',
                 'communication_needs' => 'Mild expressive aphasia — allow time, offer choices rather than open questions.', 'dietary_needs' => 'Soft/pureed diet, thickened fluids.',
+                'background' => [
+                    'no_known_allergies' => true, 'smoking_status' => 'never', 'alcohol_intake' => 'None',
+                    'resuscitation_status' => 'for_resuscitation',
+                    'resuscitation_notes' => 'Discussed with Faith and her daughter in April 2025 — for full resuscitation.',
+                    'medical_history_summary' => 'Ischaemic stroke in March 2025, leaving right-sided weakness and mild expressive aphasia. Atrial fibrillation was found during that admission — now on an anticoagulant.',
+                ],
+                'history' => [
+                    ['category' => 'condition', 'name' => 'Ischaemic stroke', 'started_on' => '2025-03-15', 'provider' => 'Stroke unit, Sally Mugabe Central Hospital', 'notes' => 'Right-sided weakness and mild expressive aphasia remain.'],
+                    ['category' => 'condition', 'name' => 'Atrial fibrillation', 'started_on' => '2025-03-16', 'provider' => 'Sally Mugabe Central Hospital', 'notes' => 'Apixaban twice daily — report any unusual bruising or bleeding.'],
+                    ['category' => 'disability', 'name' => 'Right-side weakness', 'started_on' => '2025-03-15', 'notes' => 'Uses a wheelchair for longer distances.'],
+                    ['category' => 'admission', 'name' => 'Stroke', 'started_on' => '2025-03-15', 'ended_on' => '2025-04-02', 'provider' => 'Sally Mugabe Central Hospital', 'notes' => 'Two weeks on the stroke unit, then early supported discharge home.'],
+                    ['category' => 'immunisation', 'name' => 'COVID-19', 'started_on' => '2025-10-14', 'provider' => 'GP surgery'],
+                ],
             ],
             [
                 'first_name' => 'Enock', 'last_name' => 'Chirwa', 'preferred_name' => null, 'gender' => 'Male',
                 'dob' => '1942-09-16', 'phone' => '+263 77 678 9012', 'address' => '3 Chinhoyi Street, Harare', 'lat' => -17.8318, 'lng' => 31.0385,
                 'funding_source' => 'Self-funded', 'branch' => $this->harare, 'care_manager' => 'Branch Manager', 'funder' => 2,
-                'allergies' => [], 'diagnoses' => [], 'medical_conditions' => [], 'disabilities' => [],
                 'mobility_notes' => null, 'communication_needs' => null, 'dietary_needs' => null,
                 'status' => 'discharged',
             ],
         ];
 
         foreach ($definitions as $def) {
-            $this->serviceUsers[] = ServiceUser::create([
+            $careManager = $this->staff[$def['care_manager']];
+
+            $serviceUser = ServiceUser::create([
                 'tenant_id' => $this->tenant->id,
                 'branch_id' => $def['branch']->id,
-                'care_manager_id' => $this->staff[$def['care_manager']]->id,
+                'care_manager_id' => $careManager->id,
                 'first_name' => $def['first_name'],
                 'last_name' => $def['last_name'],
                 'preferred_name' => $def['preferred_name'],
@@ -262,14 +325,30 @@ class DemoDataSeeder extends Seeder
                 'funding_source' => $def['funding_source'],
                 'funder_id' => $this->funders[$def['funder']]->id,
                 'status' => $def['status'] ?? 'active',
-                'allergies' => $def['allergies'],
-                'diagnoses' => $def['diagnoses'],
-                'medical_conditions' => $def['medical_conditions'],
-                'disabilities' => $def['disabilities'],
                 'mobility_notes' => $def['mobility_notes'],
                 'communication_needs' => $def['communication_needs'],
                 'dietary_needs' => $def['dietary_needs'],
+                ...($def['background'] ?? []),
             ]);
+
+            // Each entry also fills in the client's allergy and condition
+            // summary lists (see MedicalSummary).
+            foreach ($def['history'] ?? [] as $entry) {
+                $serviceUser->medicalHistory()->create([
+                    ...MedicalHistoryEntry::forCategory($entry),
+                    'tenant_id' => $this->tenant->id,
+                    'recorded_by' => $careManager->id,
+                ]);
+            }
+
+            if ($def['reviewed'] ?? false) {
+                $serviceUser->update([
+                    'medical_history_reviewed_at' => now()->subMonths(2),
+                    'medical_history_reviewed_by' => $careManager->id,
+                ]);
+            }
+
+            $this->serviceUsers[] = $serviceUser->fresh();
         }
     }
 

@@ -21,7 +21,7 @@ class VisitController extends Controller
 {
     public function index(Request $request)
     {
-        $visits = Visit::with(['serviceUser', 'carer'])
+        $visits = Visit::with(['serviceUser.currentAllergies', 'carer'])
             ->when($request->query('carer_id'), fn ($q, $carerId) => $q->where('carer_id', $carerId))
             ->when($request->query('service_user_id'), fn ($q, $id) => $q->where('service_user_id', $id))
             ->when($request->query('date'), fn ($q, $date) => $q->where('visit_date', $date))
@@ -105,7 +105,7 @@ class VisitController extends Controller
             403
         );
 
-        return new VisitResource($visit->load(['serviceUser', 'carer']));
+        return new VisitResource($visit->load(['serviceUser.currentAllergies', 'carer']));
     }
 
     public function update(UpdateVisitRequest $request, Visit $visit)

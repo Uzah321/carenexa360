@@ -77,7 +77,7 @@ class ServiceUserController extends Controller
             403
         );
 
-        return new ServiceUserResource($serviceUser->load('carers'));
+        return new ServiceUserResource($serviceUser->load(['carers', 'medicalHistoryReviewer']));
     }
 
     public function update(UpdateServiceUserRequest $request, ServiceUser $serviceUser)

@@ -9,6 +9,7 @@ use App\Modules\Incidents\Models\Incident;
 use App\Modules\Medications\Models\Medication;
 use App\Modules\Medications\Models\MedicationAdministration;
 use App\Modules\Observations\Models\Observation;
+use App\Modules\Organization\Support\TenantSettings;
 use App\Modules\Quality\Models\Complaint;
 use App\Modules\ServiceUsers\Models\ServiceUser;
 use App\Modules\Staff\Models\StaffProfile;
@@ -38,6 +39,8 @@ class DataMaintenanceController extends Controller
         $staff = fn (StaffProfile $sp) => ['label' => $sp->user->name ?? "Staff #{$sp->id}", 'link' => '/staff'];
         $activeClients = fn () => ServiceUser::where('status', 'active');
         $activeStaff = fn () => StaffProfile::where('employment_status', '!=', 'inactive')->with('user');
+        // A medical history is due a fresh look as often as the care plan is.
+        $historyReviewMonths = (int) TenantSettings::for($tenantId, 'care_pathway.review_interval_months');
 
         $checks = [
             $this->check('clients_missing_dob', 'Clients without a date of birth', 'Needed on care plans, risk assessments and NHS records.', 'warning',
@@ -48,6 +51,13 @@ class DataMaintenanceController extends Controller
                 $activeClients()->where(fn ($q) => $q->whereNull('latitude')->orWhereNull('longitude'))->get(), $client),
             $this->check('clients_without_plan', 'Clients without an active care plan', 'Every client receiving care should have one.', 'danger',
                 $activeClients()->whereDoesntHave('carePlans', fn ($q) => $q->where('status', 'active'))->get(), $client),
+            $this->check('clients_allergies_unknown', 'Clients with allergy status not recorded', 'No allergies are on record and "No known allergies" hasn\'t been confirmed — check before giving any medication.', 'danger',
+                $activeClients()->allergyStatusUnknown()->get(), $client),
+            $this->check('clients_without_medical_history', 'Clients with no medical history', 'Nothing has been recorded on their Medical History tab yet.', 'warning',
+                $activeClients()->whereDoesntHave('medicalHistory')->get(), $client),
+            $this->check('medical_history_review_due', 'Medical histories due a review', "Not signed off as reviewed in the last {$historyReviewMonths} months (the care plan review interval).", 'info',
+                $activeClients()->where(fn ($q) => $q->whereNull('medical_history_reviewed_at')
+                    ->orWhere('medical_history_reviewed_at', '<', now()->subMonths($historyReviewMonths)))->get(), $client),
             $this->check('clients_without_manager', 'Clients without a care manager', 'Set on the client\'s Care Team card.', 'warning',
                 $activeClients()->whereNull('care_manager_id')->get(), $client),
             $this->check('clients_without_carers', 'Clients without a care team', 'No carers are linked to them on the Care Team card.', 'info',

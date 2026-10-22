@@ -2,6 +2,7 @@
 
 namespace App\Modules\ServiceUsers\Http\Requests;
 
+use App\Modules\ServiceUsers\Models\ServiceUser;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -47,14 +48,15 @@ class StoreServiceUserRequest extends FormRequest
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'funding_source' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'string', Rule::in(['active', 'inactive', 'discharged'])],
-            'allergies' => ['nullable', 'array'],
-            'allergies.*' => ['string', 'max:255'],
-            'diagnoses' => ['nullable', 'array'],
-            'diagnoses.*' => ['string', 'max:255'],
-            'medical_conditions' => ['nullable', 'array'],
-            'medical_conditions.*' => ['string', 'max:255'],
-            'disabilities' => ['nullable', 'array'],
-            'disabilities.*' => ['string', 'max:255'],
+            // Allergies, diagnoses, conditions and disabilities aren't set
+            // here — they're recorded as medical history entries, which keep
+            // the client's summary lists up to date (see MedicalSummary).
+            'no_known_allergies' => ['sometimes', 'boolean'],
+            'smoking_status' => ['nullable', 'string', Rule::in(ServiceUser::SMOKING_STATUSES)],
+            'alcohol_intake' => ['nullable', 'string', 'max:255'],
+            'resuscitation_status' => ['nullable', 'string', Rule::in(ServiceUser::RESUSCITATION_STATUSES)],
+            'resuscitation_notes' => ['nullable', 'string'],
+            'medical_history_summary' => ['nullable', 'string'],
             'mobility_notes' => ['nullable', 'string'],
             'communication_needs' => ['nullable', 'string'],
             'dietary_needs' => ['nullable', 'string'],

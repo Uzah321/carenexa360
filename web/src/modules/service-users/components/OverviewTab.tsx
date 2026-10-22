@@ -15,7 +15,6 @@ import {
   RowActionsMenu,
   Select,
   StatusBadge,
-  TagInput,
   Textarea,
   type Column,
   type RowAction,
@@ -45,17 +44,27 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
   );
 }
 
-function TagList({ label, items }: { label: string; items: string[] | undefined }) {
+function TagList({
+  label,
+  items,
+  tone = "warning",
+  empty,
+}: {
+  label: string;
+  items: string[] | undefined;
+  tone?: "warning" | "danger";
+  empty?: ReactNode;
+}) {
   const safeItems = items ?? [];
   return (
     <div className="border-b border-line py-2 last:border-0">
       <div className="mb-1 text-sm text-inksoft">{label}</div>
       {safeItems.length === 0 ? (
-        <span className="text-sm text-inksoft">None recorded</span>
+        (empty ?? <span className="text-sm text-inksoft">None recorded</span>)
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {safeItems.map((item) => (
-            <StatusBadge key={item} label={item} tone="warning" />
+            <StatusBadge key={item} label={item} tone={tone} />
           ))}
         </div>
       )}
@@ -118,7 +127,13 @@ function HospitalDocuments({ serviceUserId }: { serviceUserId: number }) {
   );
 }
 
-export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
+export function OverviewTab({
+  serviceUser,
+  onOpenMedicalHistory,
+}: {
+  serviceUser: ServiceUser;
+  onOpenMedicalHistory: () => void;
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <PersonalDetailsCard serviceUser={serviceUser} />
@@ -127,7 +142,7 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
 
       <CarePathwayCard serviceUserId={serviceUser.id} />
 
-      <MedicalSummaryCard serviceUser={serviceUser} />
+      <MedicalSummaryCard serviceUser={serviceUser} onOpenMedicalHistory={onOpenMedicalHistory} />
 
       <HospitalRecordsCard serviceUser={serviceUser} />
 
@@ -141,7 +156,7 @@ export function OverviewTab({ serviceUser }: { serviceUser: ServiceUser }) {
 }
 
 /** A Card with an "Edit" button in its header that opens a Modal form —
- * shared shape for the four Overview panels below and LocationCard, so a
+ * shared shape for the Overview panels below and LocationCard, so a
  * field save always follows the same pattern: local draft state, PATCH via
  * useUpdateServiceUser, close on success. */
 function EditableCard({
@@ -447,90 +462,49 @@ function PersonalDetailsCard({ serviceUser }: { serviceUser: ServiceUser }) {
   );
 }
 
-function MedicalSummaryCard({ serviceUser }: { serviceUser: ServiceUser }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const updateServiceUser = useUpdateServiceUser(serviceUser.id);
-  const [draft, setDraft] = useState({
-    allergies: serviceUser.allergies ?? [],
-    diagnoses: serviceUser.diagnoses ?? [],
-    medical_conditions: serviceUser.medical_conditions ?? [],
-    disabilities: serviceUser.disabilities ?? [],
-  });
-
-  function openModal() {
-    setDraft({
-      allergies: serviceUser.allergies ?? [],
-      diagnoses: serviceUser.diagnoses ?? [],
-      medical_conditions: serviceUser.medical_conditions ?? [],
-      disabilities: serviceUser.disabilities ?? [],
-    });
-    setError(null);
-    setIsOpen(true);
-  }
-
-  async function handleSave(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    try {
-      await updateServiceUser.mutateAsync(draft);
-      setIsOpen(false);
-    } catch (err) {
-      setError(apiErrorMessage(err, "Could not save the medical summary. Please try again."));
-    }
-  }
-
+/**
+ * At a glance only — built from the Medical History tab, which is where
+ * allergies, conditions and disabilities are recorded and edited.
+ */
+function MedicalSummaryCard({
+  serviceUser,
+  onOpenMedicalHistory,
+}: {
+  serviceUser: ServiceUser;
+  onOpenMedicalHistory: () => void;
+}) {
   return (
-    <EditableCard
-      title="Medical Summary"
-      formId="edit-medical-summary-form"
-      isOpen={isOpen}
-      onOpenChange={(open) => (open ? openModal() : setIsOpen(false))}
-      isSaving={updateServiceUser.isPending}
-      error={error}
-      onSubmit={handleSave}
-      form={
-        <>
-          <FormField label="Allergies" htmlFor="ms-allergies">
-            <TagInput
-              id="ms-allergies"
-              value={draft.allergies}
-              onChange={(tags) => setDraft({ ...draft, allergies: tags })}
-              placeholder="Type and press Enter…"
-            />
-          </FormField>
-          <FormField label="Diagnoses" htmlFor="ms-diagnoses">
-            <TagInput
-              id="ms-diagnoses"
-              value={draft.diagnoses}
-              onChange={(tags) => setDraft({ ...draft, diagnoses: tags })}
-              placeholder="Type and press Enter…"
-            />
-          </FormField>
-          <FormField label="Medical conditions" htmlFor="ms-conditions">
-            <TagInput
-              id="ms-conditions"
-              value={draft.medical_conditions}
-              onChange={(tags) => setDraft({ ...draft, medical_conditions: tags })}
-              placeholder="Type and press Enter…"
-            />
-          </FormField>
-          <FormField label="Disabilities" htmlFor="ms-disabilities">
-            <TagInput
-              id="ms-disabilities"
-              value={draft.disabilities}
-              onChange={(tags) => setDraft({ ...draft, disabilities: tags })}
-              placeholder="Type and press Enter…"
-            />
-          </FormField>
-        </>
-      }
-    >
-      <TagList label="Allergies" items={serviceUser.allergies} />
-      <TagList label="Diagnoses" items={serviceUser.diagnoses} />
-      <TagList label="Medical conditions" items={serviceUser.medical_conditions} />
-      <TagList label="Disabilities" items={serviceUser.disabilities} />
-    </EditableCard>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <span>Medical Summary</span>
+          <Button variant="secondary" onClick={onOpenMedicalHistory}>
+            Full History
+          </Button>
+        </div>
+      </CardHeader>
+      <CardBody>
+        {serviceUser.resuscitation_status === "dnacpr" && (
+          <div className="mb-2">
+            <Alert tone="danger">DNACPR in place — see the Medical History tab for details.</Alert>
+          </div>
+        )}
+        <TagList
+          label="Allergies"
+          items={serviceUser.allergies}
+          tone="danger"
+          empty={
+            serviceUser.no_known_allergies ? (
+              <StatusBadge label="No known allergies" tone="success" />
+            ) : (
+              <StatusBadge label="Not recorded" tone="warning" />
+            )
+          }
+        />
+        <TagList label="Conditions & diagnoses" items={serviceUser.medical_conditions} />
+        <TagList label="Disabilities" items={serviceUser.disabilities} />
+      </CardBody>
+    </Card>
   );
 }
 

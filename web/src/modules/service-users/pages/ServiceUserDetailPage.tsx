@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Card, CardBody, PageHeader, StatusBadge, Tabs } from "../../../design-system";
 import { useServiceUser } from "../api";
 import { OverviewTab } from "../components/OverviewTab";
+import { MedicalHistoryTab } from "../components/MedicalHistoryTab";
 import { CarePlanTab } from "../components/CarePlanTab";
 import { AssessmentsTab } from "../components/AssessmentsTab";
 import { DocumentsTab } from "../components/DocumentsTab";
@@ -45,6 +46,7 @@ export function ServiceUserDetailPage() {
       <Tabs
         items={[
           { key: "overview", label: "Overview" },
+          { key: "medical-history", label: "Medical History" },
           { key: "care-plan", label: "Care Plan" },
           { key: "assessments", label: "Assessments" },
           { key: "medications", label: "Medications" },
@@ -57,7 +59,8 @@ export function ServiceUserDetailPage() {
         onChange={setTab}
       />
       <div className="mt-4">
-        {tab === "overview" && <OverviewTab serviceUser={serviceUser} />}
+        {tab === "overview" && <OverviewTab serviceUser={serviceUser} onOpenMedicalHistory={() => setTab("medical-history")} />}
+        {tab === "medical-history" && <MedicalHistoryTab serviceUser={serviceUser} />}
         {tab === "care-plan" && <CarePlanTab serviceUserId={id} serviceUser={serviceUser} />}
         {tab === "assessments" && <AssessmentsTab serviceUserId={id} />}
         {tab === "medications" && <MedicationsTab serviceUserId={id} />}

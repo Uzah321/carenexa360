@@ -131,10 +131,21 @@ export interface ServiceUser {
   longitude: number | null;
   funding_source: string | null;
   status: "active" | "inactive" | "discharged";
+  /** These four are built from the medical history by the API — read-only. */
   allergies: string[];
   diagnoses: string[];
   medical_conditions: string[];
   disabilities: string[];
+  /** Confirmed as having none — distinct from allergies not yet recorded. */
+  no_known_allergies: boolean;
+  smoking_status: SmokingStatus | null;
+  alcohol_intake: string | null;
+  resuscitation_status: ResuscitationStatus | null;
+  resuscitation_notes: string | null;
+  medical_history_summary: string | null;
+  medical_history_reviewed_at: string | null;
+  medical_history_reviewed_by: number | null;
+  medical_history_reviewed_by_name?: string | null;
   mobility_notes: string | null;
   communication_needs: string | null;
   dietary_needs: string | null;
@@ -175,6 +186,63 @@ export interface ServiceUserContact {
   address: string | null;
   notes: string | null;
 }
+
+// Mirror App\Modules\ServiceUsers\Models\ServiceUser on the backend.
+export const SMOKING_STATUSES = ["never", "former", "current"] as const;
+export type SmokingStatus = (typeof SMOKING_STATUSES)[number];
+export const RESUSCITATION_STATUSES = ["for_resuscitation", "dnacpr"] as const;
+export type ResuscitationStatus = (typeof RESUSCITATION_STATUSES)[number];
+
+// Mirror App\Modules\MedicalHistory\Models\MedicalHistoryEntry on the backend.
+export const MEDICAL_HISTORY_CATEGORIES = [
+  "allergy",
+  "condition",
+  "mental_health",
+  "disability",
+  "procedure",
+  "admission",
+  "immunisation",
+  "family_history",
+] as const;
+export type MedicalHistoryCategory = (typeof MEDICAL_HISTORY_CATEGORIES)[number];
+export const MEDICAL_HISTORY_STATUSES = ["active", "in_remission", "resolved"] as const;
+export type MedicalHistoryStatus = (typeof MEDICAL_HISTORY_STATUSES)[number];
+export const ALLERGY_SEVERITIES = ["mild", "moderate", "severe", "life_threatening"] as const;
+export type AllergySeverity = (typeof ALLERGY_SEVERITIES)[number];
+export const ALLERGY_TYPES = ["medication", "food", "environmental", "other"] as const;
+export type AllergyType = (typeof ALLERGY_TYPES)[number];
+
+export interface MedicalHistoryEntry {
+  id: number;
+  service_user_id: number;
+  category: MedicalHistoryCategory;
+  name: string;
+  status: MedicalHistoryStatus | null;
+  severity: AllergySeverity | null;
+  allergy_type: AllergyType | null;
+  reaction: string | null;
+  relationship: string | null;
+  started_on: string | null;
+  ended_on: string | null;
+  provider: string | null;
+  notes: string | null;
+  recorded_by: number | null;
+  recorded_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Mirrors App\Modules\MedicalHistory\Support\MedicalHistoryRoles::CLINICAL_LEADS
+// on the backend — who can sign a history off as reviewed, and remove an
+// entry someone else recorded.
+export const MEDICAL_HISTORY_LEAD_ROLES = [
+  "Organization Owner",
+  "Organization Admin",
+  "Branch Manager",
+  "Care Manager",
+  "Nurse",
+  "Doctor",
+] as const;
 
 export const CARE_PLAN_AREAS = [
   "personal_care",
@@ -513,10 +581,20 @@ export type VisitStatus = (typeof VISIT_STATUSES)[number];
 export const VISIT_PRIORITIES = ["low", "medium", "high"] as const;
 export type VisitPriority = (typeof VISIT_PRIORITIES)[number];
 
+/** What a carer has to know before walking in — sent with each visit. */
+export interface VisitClientAlerts {
+  /** Current allergies only. Severity and reaction come with the visit list and detail. */
+  allergies: { name: string; severity: AllergySeverity | null; reaction: string | null }[];
+  no_known_allergies: boolean;
+  resuscitation_status: ResuscitationStatus | null;
+  resuscitation_notes: string | null;
+}
+
 export interface Visit {
   id: number;
   service_user_id: number;
   service_user_name?: string | null;
+  client_alerts?: VisitClientAlerts | null;
   carer_id: number | null;
   carer_name?: string | null;
   visit_date: string;

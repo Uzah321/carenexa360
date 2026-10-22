@@ -30,7 +30,7 @@ class AuditDescriber
         'user_id', 'carer_id', 'care_manager_id', 'assigned_to', 'administered_by', 'witness_id', 'responsible_staff_id',
         'action_owner_id', 'created_by', 'recorded_by', 'reported_by', 'reviewed_by', 'responsible_user_id', 'staff_user_id',
         'checked_by', 'approved_by', 'acknowledged_by', 'author_id', 'uploaded_by', 'posted_by', 'completed_by',
-        'closed_by', 'overridden_by',
+        'closed_by', 'overridden_by', 'medical_history_reviewed_by',
     ];
 
     /** Kinds of record: label, how to name one, where it lives in the app. */
@@ -43,6 +43,7 @@ class AuditDescriber
         return [
             'ServiceUser' => ['Client', fn ($a) => trim(($a['first_name'] ?? '').' '.($a['last_name'] ?? '')), fn ($a, $id) => "/service-users/{$id}"],
             'ServiceUserContact' => ['Client contact', fn ($a) => self::join($a['name'] ?? null, $client($a['service_user_id'] ?? null)), fn ($a) => $clientLink($a['service_user_id'] ?? null)],
+            'MedicalHistoryEntry' => ['Medical history', fn ($a) => self::join($a['name'] ?? null, $client($a['service_user_id'] ?? null)), fn ($a) => $clientLink($a['service_user_id'] ?? null)],
             'Medication' => ['Medication', fn ($a) => self::join(trim(($a['name'] ?? '').' '.($a['strength'] ?? '')), $client($a['service_user_id'] ?? null)), fn ($a) => $clientLink($a['service_user_id'] ?? null)],
             'MedicationAdministration' => ['Medication record', function ($a) use ($client) {
                 $med = isset($a['medication_id']) ? Medication::find($a['medication_id']) : null;

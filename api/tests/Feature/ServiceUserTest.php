@@ -23,12 +23,14 @@ class ServiceUserTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Smith',
             'date_of_birth' => '1950-01-01',
-            'allergies' => ['Penicillin'],
+            'no_known_allergies' => true,
+            'resuscitation_status' => 'dnacpr',
         ]);
 
         $response->assertCreated()
             ->assertJsonPath('data.first_name', 'John')
-            ->assertJsonPath('data.allergies.0', 'Penicillin');
+            ->assertJsonPath('data.no_known_allergies', true)
+            ->assertJsonPath('data.resuscitation_status', 'dnacpr');
 
         $serviceUserId = $response->json('data.id');
 

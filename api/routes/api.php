@@ -23,6 +23,7 @@ use App\Modules\Organization\Http\Controllers\DataMaintenanceController;
 use App\Modules\Quality\Http\Controllers\ComplaintController;
 use App\Modules\Quality\Http\Controllers\SpotCheckController;
 use App\Modules\Marketing\Http\Controllers\DemoRequestController;
+use App\Modules\MedicalHistory\Http\Controllers\MedicalHistoryController;
 use App\Modules\Medications\Http\Controllers\MedicationAdministrationController;
 use App\Modules\Medications\Http\Controllers\MedicationController;
 use App\Modules\Observations\Http\Controllers\ClinicalAlertController;
@@ -118,6 +119,10 @@ Route::prefix('v1')->group(function () {
                 Route::get('/{serviceUser}/care-notes', [CareNoteController::class, 'index']);
                 Route::post('/{serviceUser}/care-notes', [CareNoteController::class, 'store']);
 
+                Route::get('/{serviceUser}/medical-history', [MedicalHistoryController::class, 'index']);
+                Route::post('/{serviceUser}/medical-history', [MedicalHistoryController::class, 'store']);
+                Route::post('/{serviceUser}/medical-history/review', [MedicalHistoryController::class, 'review']);
+
                 Route::get('/{serviceUser}/medications', [MedicationController::class, 'index']);
                 Route::post('/{serviceUser}/medications', [MedicationController::class, 'store']);
 
@@ -140,6 +145,9 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/care-notes/{careNote}/audio', [CareNoteController::class, 'audio']);
             Route::delete('/care-notes/{careNote}', [CareNoteController::class, 'destroy']);
+
+            Route::patch('/medical-history/{medicalHistoryEntry}', [MedicalHistoryController::class, 'update']);
+            Route::delete('/medical-history/{medicalHistoryEntry}', [MedicalHistoryController::class, 'destroy']);
 
             Route::prefix('medications')->group(function () {
                 Route::get('/{medication}', [MedicationController::class, 'show']);

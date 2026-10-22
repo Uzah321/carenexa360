@@ -13,6 +13,7 @@ import {
   Textarea,
 } from "../../../design-system";
 import { useCheckIn, useCheckOut, useUpdateVisit, useVisit } from "../api";
+import { ClientAlertsPanel } from "../components/ClientAlerts";
 import { useCurrentDutyPeriod } from "../../tracking/api";
 import { useAuth } from "../../../lib/auth-context";
 import { ROSTERING_ROLES } from "../../../lib/types";
@@ -144,6 +145,8 @@ export function VisitDetailPage() {
         breadcrumbs={[{ label: "Visits", to: "/visits" }, { label: `#${visit.id}` }]}
         actions={<StatusBadge label={visit.status.replaceAll("_", " ")} tone={STATUS_TONE[visit.status]} />}
       />
+
+      <ClientAlertsPanel alerts={visit.client_alerts} />
 
       <Card>
         <CardHeader>Visit Details</CardHeader>

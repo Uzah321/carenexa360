@@ -61,12 +61,26 @@ class TenantSettings
             'medication_routes' => ['Oral', 'Topical', 'Inhaled', 'Transdermal patch', 'Subcutaneous injection', 'Eye drops', 'Ear drops', 'Nasal', 'Rectal', 'PEG'],
             'medication_forms' => ['Tablet', 'Capsule', 'Liquid', 'Cream', 'Ointment', 'Inhaler', 'Patch', 'Drops', 'Injection'],
             'equipment' => ['Walking frame', 'Walking stick', 'Wheelchair', 'Hoist', 'Slide sheet', 'Commode', 'Shower chair', 'Pressure-relieving mattress', 'Gait belt'],
+            'medical_conditions' => [
+                'Type 2 diabetes', 'Type 1 diabetes', 'Hypertension', 'Atrial fibrillation', 'Heart failure', 'Coronary heart disease',
+                'Stroke', 'Transient ischaemic attack (TIA)', 'COPD', 'Asthma', "Alzheimer's disease", 'Vascular dementia',
+                "Parkinson's disease", 'Multiple sclerosis', 'Epilepsy', 'Osteoarthritis', 'Rheumatoid arthritis', 'Osteoporosis',
+                'Chronic kidney disease', 'Hypothyroidism', 'Cancer', 'Depression', 'Anxiety', 'Bipolar disorder', 'Schizophrenia',
+            ],
+            'allergens' => [
+                'Penicillin', 'Amoxicillin', 'Aspirin', 'Ibuprofen', 'Codeine', 'Morphine', 'Trimethoprim', 'Sulfonamides',
+                'Latex', 'Sticking plasters', 'Chlorhexidine', 'Peanuts', 'Tree nuts', 'Shellfish', 'Eggs', 'Milk', 'Wheat',
+                'Bee and wasp stings', 'Pollen', 'House dust mite', 'Animal dander',
+            ],
+            'vaccines' => [
+                'Influenza (annual)', 'COVID-19', 'Pneumococcal', 'Shingles', 'RSV', 'Tetanus, diphtheria and polio', 'Hepatitis B',
+            ],
         ],
     ];
 
     public const REFERENCE_LISTS = [
         'care_tasks', 'skills', 'job_titles', 'staff_document_categories', 'client_document_categories',
-        'medication_routes', 'medication_forms', 'equipment',
+        'medication_routes', 'medication_forms', 'equipment', 'medical_conditions', 'allergens', 'vaccines',
     ];
 
     /** Validation rules for a settings update (all optional — only what's sent is saved). */

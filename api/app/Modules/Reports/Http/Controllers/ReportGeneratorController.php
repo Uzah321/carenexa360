@@ -315,7 +315,7 @@ class ReportGeneratorController extends Controller
                 'nhs_number' => $su->nhs_number ?? '—',
                 'status' => $su->status,
                 'funding_source' => $su->funding_source ?? '—',
-                'allergies' => implode(', ', $su->allergies ?? []) ?: 'None recorded',
+                'allergies' => implode(', ', $su->allergies ?? []) ?: ($su->no_known_allergies ? 'No known allergies' : 'Not recorded'),
                 'diagnoses' => implode(', ', $su->diagnoses ?? []) ?: '—',
                 'care_plan' => ($plan = $su->carePlans->first()) ? "Version {$plan->version}" : 'None',
             ]),

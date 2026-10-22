@@ -1,5 +1,6 @@
 import type { CarePlan, CarePlanRiskAssessment, CarePlanSection, HomeCarePlan, ServiceUser } from "../../lib/types";
 import { todayIso } from "../../lib/dates";
+import { downloadWordDocument, escapeHtml as esc, fileSlug, htmlDocument, printHtmlDocument } from "../../lib/htmlDocument";
 import { richTextToHtml } from "../../lib/richText";
 import { END_OF_LIFE_AREAS, NEED_AREAS, SUMMARIES, consentLabel, homeCarePlanHasContent, type NeedAreaConfig } from "./homeCarePlan";
 import {
@@ -13,18 +14,8 @@ import {
   riskScore,
 } from "./risk";
 
-// Builds the care plan as one self-contained HTML document. The same markup
-// feeds both exports: printed via the browser (where "Save as PDF" is the
-// PDF route), and downloaded as a .doc, which Word opens natively as HTML —
-// so neither needs a PDF or DOCX library.
-
-function esc(value: unknown): string {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+// Builds the care plan as one self-contained HTML document — see
+// lib/htmlDocument for how it's printed and downloaded.
 
 function multiline(value: string | null | undefined): string {
   return value ? esc(value).replaceAll("\n", "<br>") : "—";
@@ -167,30 +158,6 @@ function riskSummaryTable(assessments: CarePlanRiskAssessment[]): string {
   return `<table class="grid"><thead><tr><th>#</th><th>Hazard</th><th>Who might be harmed</th><th>Initial</th><th>Residual</th><th>Review</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-const STYLES = `
-  @page { size: A4; margin: 16mm 14mm; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1a1a1a; line-height: 1.4; }
-  h1 { font-size: 18pt; margin: 0 0 4pt; }
-  h2 { font-size: 13pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid #0f766e; color: #0f766e; }
-  h3 { font-size: 11pt; margin: 12pt 0 4pt; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
-  th, td { border: 1px solid #c8c8c8; padding: 4pt 6pt; vertical-align: top; text-align: left; }
-  table.kv th { width: 32%; background: #f3f4f6; font-weight: bold; }
-  table.grid thead th { background: #f3f4f6; }
-  ul, ol { margin: 0; padding-left: 14pt; }
-  p { margin: 0 0 3pt; }
-  mark { background: #fde68a; }
-  small { color: #555; }
-  .meta { color: #555; margin-bottom: 8pt; }
-  .block { page-break-inside: avoid; break-inside: avoid; }
-  .rating { font-weight: bold; }
-  .rating.low { color: #3f7d20; }
-  .rating.medium { color: #b45309; }
-  .rating.high, .rating.very_high { color: #b91c1c; }
-  .signatures td { height: 34pt; }
-  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-`;
-
 /**
  * What an export covers — the tab the user is on when they press Print or
  * Download. "full" is the whole care plan (the Overview tab); every other
@@ -312,7 +279,7 @@ export function buildCarePlanHtml(
         row("Date of birth", esc(serviceUser.date_of_birth ?? "—")),
         row("NHS number", esc(serviceUser.nhs_number ?? "—")),
         row("Address", multiline(serviceUser.address)),
-        row("Allergies", esc(serviceUser.allergies?.join(", ") || "None recorded")),
+        row("Allergies", esc(serviceUser.allergies?.join(", ") || (serviceUser.no_known_allergies ? "No known allergies" : "Not recorded"))),
         row("Diagnoses", esc(serviceUser.diagnoses?.join(", ") || "—")),
         row("Communication needs", multiline(serviceUser.communication_needs)),
         row("Capacity & consent", multiline(serviceUser.capacity_consent_notes)),
@@ -365,58 +332,26 @@ export function buildCarePlanHtml(
   ${SIGNATURES_HTML}`;
   }
 
-  return `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8">
-<title>${esc(title)} — ${esc(name)} — v${plan.version}</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
-<style>${STYLES}</style>
-</head>
-<body>
+  return htmlDocument(
+    `${title} — ${name} — v${plan.version}`,
+    `
   <h1>${esc(title)} — ${esc(name)}</h1>
   <p class="meta">
     ${scope.kind === "history" ? "" : `Care plan version ${plan.version} · ${plan.status === "active" ? "Current" : "Archived"} · Effective from ${esc(plan.effective_from)}`}
     ${scope.kind !== "history" && plan.created_by_name ? ` · Prepared by ${esc(plan.created_by_name)}` : ""}${scope.kind === "history" ? "" : " · "}Printed ${esc(todayIso())}
   </p>
-  ${body}
-</body>
-</html>`;
+  ${body}`,
+  );
 }
 
 function fileBaseName(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope): string {
   const who = serviceUser ? `${serviceUser.first_name}-${serviceUser.last_name}` : `service-user-${plan.service_user_id}`;
   const version = scope.kind === "history" ? "" : `-v${plan.version}`;
-  return `${scopeTitle(scope)}-${who}${version}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+  return fileSlug(`${scopeTitle(scope)}-${who}${version}`);
 }
 
-// Prints via a hidden iframe so the app's own layout/CSS doesn't leak into
-// the document. The browser's print dialog offers "Save as PDF".
 export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope = { kind: "full" }): void {
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument;
-  const win = iframe.contentWindow;
-  if (!doc || !win) {
-    iframe.remove();
-    return;
-  }
-
-  doc.open();
-  doc.write(buildCarePlanHtml(plan, serviceUser, scope));
-  doc.close();
-  // The print dialog's default filename comes from the document title.
-  doc.title = fileBaseName(plan, serviceUser, scope);
-
-  const cleanup = () => setTimeout(() => iframe.remove(), 500);
-  win.addEventListener("afterprint", cleanup, { once: true });
-  setTimeout(() => {
-    win.focus();
-    win.print();
-  }, 50);
+  printHtmlDocument(buildCarePlanHtml(plan, serviceUser, scope), fileBaseName(plan, serviceUser, scope));
 }
 
 export function downloadCarePlanWord(
@@ -424,14 +359,5 @@ export function downloadCarePlanWord(
   serviceUser: ServiceUser | undefined,
   scope: CarePlanExportScope = { kind: "full" },
 ): void {
-  // A leading BOM makes Word pick up UTF-8 rather than guessing the encoding.
-  const blob = new Blob(["\uFEFF", buildCarePlanHtml(plan, serviceUser, scope)], { type: "application/msword" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${fileBaseName(plan, serviceUser, scope)}.doc`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadWordDocument(buildCarePlanHtml(plan, serviceUser, scope), fileBaseName(plan, serviceUser, scope));
 }
