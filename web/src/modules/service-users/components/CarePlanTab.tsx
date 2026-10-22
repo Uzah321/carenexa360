@@ -28,13 +28,13 @@ import { emptyRiskAssessmentInput, normalizeRiskAssessmentInput, toRiskAssessmen
 import { downloadCarePlanWord, printCarePlan, type CarePlanExportScope } from "../../care-planning/carePlanExport";
 import { RiskAssessmentFormFields, RiskAssessmentList } from "./RiskAssessmentPanels";
 import { HomeCarePlanFormFields, HomeCarePlanView } from "./HomeCarePlanPanel";
+import { MedicalHistoryTab } from "./MedicalHistoryTab";
 import { emptyHomeCarePlan } from "../../care-planning/homeCarePlan";
 import { apiErrorMessage } from "../../../lib/api-error";
 import { useStaff } from "../../staff/api";
 import {
   CARE_PLAN_AREAS,
   CARE_PLAN_RISK_LEVELS,
-  type CarePlan,
   type CarePlanRiskAssessment,
   type CarePlanRiskLevel,
   type CarePlanSection,
@@ -415,63 +415,11 @@ function GoalsTab({ sections }: { sections: CarePlanSection[] }) {
   );
 }
 
-function ReviewsTab({ sections }: { sections: CarePlanSection[] }) {
-  const withReview = sections
-    .filter((s) => s.review_date)
-    .sort((a, b) => (a.review_date ?? "").localeCompare(b.review_date ?? ""));
-
-  if (withReview.length === 0) {
-    return <EmptyState message="No review dates have been set on this care plan." />;
-  }
-
-  return (
-    <ul className="divide-y divide-line rounded-2xl border border-line bg-white">
-      {withReview.map((section) => {
-        const overdue = daysUntil(section.review_date as string) < 0;
-        return (
-          <li key={section.id} className="flex items-center justify-between px-4 py-3 text-sm">
-            <span className="font-medium text-ink">{areaLabel(section.area)}</span>
-            <span className={overdue ? "font-semibold text-coral" : "text-inksoft"}>
-              {section.review_date} {overdue ? "· overdue" : ""}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function HistoryTab({ plans, viewingId, onSelect }: { plans: CarePlan[]; viewingId: number | null; onSelect: (id: number) => void }) {
-  const sorted = [...plans].sort((a, b) => b.version - a.version);
-
-  return (
-    <ul className="divide-y divide-line rounded-2xl border border-line bg-white">
-      {sorted.map((plan) => (
-        <li key={plan.id}>
-          <button
-            type="button"
-            onClick={() => onSelect(plan.id)}
-            className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors duration-150 hover:bg-paper ${
-              viewingId === plan.id ? "bg-tealtint" : ""
-            }`}
-          >
-            <span className="font-medium text-ink">
-              Version {plan.version} — effective {plan.effective_from}
-            </span>
-            <StatusBadge label={plan.status === "active" ? "CURRENT" : "archived"} tone={plan.status === "active" ? "success" : "neutral"} />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: number; serviceUser?: ServiceUser }) {
+export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: number; serviceUser: ServiceUser }) {
   const { data: plans, isLoading } = useCarePlans(serviceUserId);
   const { data: staff } = useStaff(1, 500);
   const createCarePlan = useCreateCarePlan(serviceUserId);
 
-  const [viewingId, setViewingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [isOpen, setIsOpen] = useState(false);
   const [effectiveFrom, setEffectiveFrom] = useState("");
@@ -493,46 +441,42 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
   // at once.
   const [versionError, setVersionError] = useState<string | null>(null);
 
+  // Always the current plan. Saving a change still keeps the previous
+  // version on the server; it just isn't browsed here.
   const activePlan = plans?.find((p) => p.status === "active") ?? null;
-  const viewingPlan = plans?.find((p) => p.id === viewingId) ?? activePlan;
-  const isViewingActivePlan = Boolean(activePlan && viewingPlan?.id === activePlan.id);
 
   const areaTabs: TabItem[] = useMemo(() => {
-    if (!viewingPlan) return [];
-    const present = new Set(viewingPlan.sections.map((s) => s.area));
+    if (!activePlan) return [];
+    const present = new Set(activePlan.sections.map((s) => s.area));
     return CARE_PLAN_AREAS.filter((a) => present.has(a)).map((a) => ({ key: a, label: areaLabel(a) }));
-  }, [viewingPlan]);
+  }, [activePlan]);
 
   const tabItems: TabItem[] = [
     { key: "overview", label: "Overview" },
+    { key: "medical-history", label: "Medical History" },
     { key: "home-care-plan", label: "Home Care Plan" },
     ...areaTabs,
     { key: "risks", label: "Risk Assessment" },
     { key: "medication-risk", label: "Medication Risk" },
     { key: "goals", label: "Goals" },
-    { key: "reviews", label: "Reviews" },
-    { key: "history", label: "History" },
   ];
 
   // Print / Download cover the tab that's open — the Risk Assessment tab
   // exports the risk assessment, not the whole care plan. Overview is the
-  // one tab that exports everything.
+  // one tab that exports everything. Medical History has its own buttons.
   const exportScope: CarePlanExportScope = (() => {
     switch (activeTab) {
       case "home-care-plan":
       case "risks":
       case "medication-risk":
       case "goals":
-      case "reviews":
         return { kind: activeTab };
-      case "history":
-        return { kind: "history", plans: plans ?? [] };
       default:
         return areaTabs.some((t) => t.key === activeTab) ? { kind: "area", area: activeTab } : { kind: "full" };
     }
   })();
 
-  const nextReviewDate = viewingPlan?.sections
+  const nextReviewDate = activePlan?.sections
     .map((s) => s.review_date)
     .filter((d): d is string => Boolean(d))
     .sort()[0];
@@ -573,7 +517,6 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
       sections: newSections.map(normalizeSection),
       risk_assessments: newRiskAssessments.map(normalizeRiskAssessmentInput),
     });
-    setViewingId(null);
   }
 
   async function handleCreate(event: FormEvent) {
@@ -588,7 +531,6 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
         risk_assessments: currentRiskAssessmentInputs().map(normalizeRiskAssessmentInput),
       });
       setIsOpen(false);
-      setViewingId(null);
       setActiveTab("overview");
     } catch (err) {
       setVersionError(apiErrorMessage(err, "Could not save this version. Please try again."));
@@ -721,15 +663,14 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
     );
   }
 
-  const canManageSections = isViewingActivePlan;
   const canRemoveSection = (activePlan.sections.length ?? 0) > 1;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
         <div className="flex items-center gap-3">
-          <StatusBadge label={viewingPlan?.status === "active" ? "Active" : "Archived"} tone={viewingPlan?.status === "active" ? "success" : "neutral"} />
-          <span className="text-sm font-medium text-ink">Version {viewingPlan?.version}</span>
+          <StatusBadge label="Active" tone="success" />
+          <span className="text-sm font-medium text-ink">Version {activePlan.version}</span>
           {nextReviewDate && (
             <span className={`text-sm ${daysUntil(nextReviewDate) < 0 ? "font-semibold text-coral" : "text-inksoft"}`}>
               {daysUntil(nextReviewDate) < 0
@@ -739,12 +680,12 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {viewingPlan && (
+          {activeTab !== "medical-history" && (
             <>
-              <Button variant="secondary" onClick={() => printCarePlan(viewingPlan, serviceUser, exportScope)}>
+              <Button variant="secondary" onClick={() => printCarePlan(activePlan, serviceUser, exportScope)}>
                 Print / PDF
               </Button>
-              <Button variant="secondary" onClick={() => downloadCarePlanWord(viewingPlan, serviceUser, exportScope)}>
+              <Button variant="secondary" onClick={() => downloadCarePlanWord(activePlan, serviceUser, exportScope)}>
                 Download Word
               </Button>
             </>
@@ -755,74 +696,58 @@ export function CarePlanTab({ serviceUserId, serviceUser }: { serviceUserId: num
         </div>
       </div>
 
-      {!isViewingActivePlan && viewingPlan && (
-        <Alert tone="info">You're viewing an archived version — editing and removing sections only applies to the current active plan.</Alert>
-      )}
-
       <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
 
-      {viewingPlan && (
-        <div>
-          {activeTab === "overview" && (
-            <OverviewTab
-              sections={viewingPlan.sections}
-              onSelectArea={setActiveTab}
-              canManage={canManageSections}
-              canRemove={canRemoveSection}
-              onEdit={openEditSection}
-              onRemove={setRemovingSection}
-            />
-          )}
-          {activeTab === "home-care-plan" && (
-            <HomeCarePlanView
-              plan={viewingPlan.home_care_plan}
-              riskCount={(viewingPlan.risk_assessments ?? []).length}
-              canManage={canManageSections}
-              onEdit={openHomeCarePlan}
-              onViewRisks={() => setActiveTab("risks")}
-            />
-          )}
-          {areaTabs.some((t) => t.key === activeTab) &&
-            viewingPlan.sections
-              .filter((s) => s.area === activeTab)
-              .map((section) => (
-                <SectionDetail
-                  key={section.id}
-                  section={section}
-                  actions={{
-                    canManage: canManageSections,
-                    canRemove: canRemoveSection,
-                    onEdit: () => openEditSection(section),
-                    onRemove: () => setRemovingSection(section),
-                  }}
-                />
-              ))}
-          {(activeTab === "risks" || activeTab === "medication-risk") && (
-            <RiskAssessmentList
-              type={activeTab === "risks" ? "general" : "medication"}
-              assessments={viewingPlan.risk_assessments ?? []}
-              canManage={canManageSections}
-              onAdd={() => openAddRisk(activeTab === "risks" ? "general" : "medication")}
-              onEdit={openEditRisk}
-              onRemove={setRemovingRisk}
-            >
-              {activeTab === "risks" && <AreaRiskLevels sections={viewingPlan.sections} />}
-            </RiskAssessmentList>
-          )}
-          {activeTab === "goals" && <GoalsTab sections={viewingPlan.sections} />}
-          {activeTab === "reviews" && <ReviewsTab sections={viewingPlan.sections} />}
-          {activeTab === "history" && (
-            <HistoryTab
-              plans={plans ?? []}
-              viewingId={viewingPlan.id}
-              onSelect={(id) => {
-                setViewingId(id);
-                setActiveTab("overview");
-              }}
-            />
-          )}
-        </div>
-      )}
+      <div>
+        {activeTab === "overview" && (
+          <OverviewTab
+            sections={activePlan.sections}
+            onSelectArea={setActiveTab}
+            canManage
+            canRemove={canRemoveSection}
+            onEdit={openEditSection}
+            onRemove={setRemovingSection}
+          />
+        )}
+        {activeTab === "medical-history" && <MedicalHistoryTab serviceUser={serviceUser} />}
+        {activeTab === "home-care-plan" && (
+          <HomeCarePlanView
+            plan={activePlan.home_care_plan}
+            riskCount={(activePlan.risk_assessments ?? []).length}
+            canManage
+            onEdit={openHomeCarePlan}
+            onViewRisks={() => setActiveTab("risks")}
+          />
+        )}
+        {areaTabs.some((t) => t.key === activeTab) &&
+          activePlan.sections
+            .filter((s) => s.area === activeTab)
+            .map((section) => (
+              <SectionDetail
+                key={section.id}
+                section={section}
+                actions={{
+                  canManage: true,
+                  canRemove: canRemoveSection,
+                  onEdit: () => openEditSection(section),
+                  onRemove: () => setRemovingSection(section),
+                }}
+              />
+            ))}
+        {(activeTab === "risks" || activeTab === "medication-risk") && (
+          <RiskAssessmentList
+            type={activeTab === "risks" ? "general" : "medication"}
+            assessments={activePlan.risk_assessments ?? []}
+            canManage
+            onAdd={() => openAddRisk(activeTab === "risks" ? "general" : "medication")}
+            onEdit={openEditRisk}
+            onRemove={setRemovingRisk}
+          >
+            {activeTab === "risks" && <AreaRiskLevels sections={activePlan.sections} />}
+          </RiskAssessmentList>
+        )}
+        {activeTab === "goals" && <GoalsTab sections={activePlan.sections} />}
+      </div>
 
       <Drawer
         isOpen={isOpen}

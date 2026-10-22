@@ -169,9 +169,7 @@ export type CarePlanExportScope =
   | { kind: "area"; area: string }
   | { kind: "risks" }
   | { kind: "medication-risk" }
-  | { kind: "goals" }
-  | { kind: "reviews" }
-  | { kind: "history"; plans: CarePlan[] };
+  | { kind: "goals" };
 
 const SCOPE_TITLES: Record<CarePlanExportScope["kind"], string> = {
   full: "Care Plan",
@@ -180,8 +178,6 @@ const SCOPE_TITLES: Record<CarePlanExportScope["kind"], string> = {
   risks: "Risk Assessment",
   "medication-risk": "Medication Risk Assessment",
   goals: "Care Plan Goals",
-  reviews: "Care Plan Reviews",
-  history: "Care Plan Version History",
 };
 
 function scopeTitle(scope: CarePlanExportScope): string {
@@ -224,31 +220,6 @@ function goalsHtml(sections: CarePlanSection[]): string {
   if (sections.length === 0) return "<p>No goals recorded.</p>";
   const rows = sections.map((s) => `<tr><td>${esc(areaLabel(s.area))}</td><td>${multiline(s.goal)}</td></tr>`).join("");
   return `<table class="grid"><thead><tr><th>Area</th><th>Goal / desired outcome</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-function reviewsHtml(sections: CarePlanSection[]): string {
-  const withReview = sections
-    .filter((s) => s.review_date)
-    .sort((a, b) => (a.review_date ?? "").localeCompare(b.review_date ?? ""));
-  if (withReview.length === 0) return "<p>No review dates have been set on this care plan.</p>";
-  const today = todayIso();
-  const rows = withReview
-    .map((s) => {
-      const overdue = (s.review_date ?? "") < today;
-      return `<tr><td>${esc(areaLabel(s.area))}</td><td>${esc(s.review_date)}</td><td>${overdue ? '<span class="rating high">Overdue</span>' : "Due"}</td></tr>`;
-    })
-    .join("");
-  return `<table class="grid"><thead><tr><th>Area</th><th>Review date</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-function historyHtml(plans: CarePlan[]): string {
-  const rows = [...plans]
-    .sort((a, b) => b.version - a.version)
-    .map(
-      (p) => `<tr><td>Version ${p.version}</td><td>${esc(p.effective_from)}</td><td>${p.status === "active" ? "Current" : "Archived"}</td><td>${esc(p.created_by_name ?? "—")}</td></tr>`,
-    )
-    .join("");
-  return `<table class="grid"><thead><tr><th>Version</th><th>Effective from</th><th>Status</th><th>Prepared by</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 const SIGNATURES_HTML = `
@@ -307,12 +278,6 @@ export function buildCarePlanHtml(
     case "goals":
       body = `<h2>Goals</h2>${goalsHtml(plan.sections)}`;
       break;
-    case "reviews":
-      body = `<h2>Review dates</h2>${reviewsHtml(plan.sections)}`;
-      break;
-    case "history":
-      body = `<h2>Versions</h2>${historyHtml(scope.plans)}`;
-      break;
     default:
       body = `
   ${aboutHtml}
@@ -337,8 +302,8 @@ export function buildCarePlanHtml(
     `
   <h1>${esc(title)} — ${esc(name)}</h1>
   <p class="meta">
-    ${scope.kind === "history" ? "" : `Care plan version ${plan.version} · ${plan.status === "active" ? "Current" : "Archived"} · Effective from ${esc(plan.effective_from)}`}
-    ${scope.kind !== "history" && plan.created_by_name ? ` · Prepared by ${esc(plan.created_by_name)}` : ""}${scope.kind === "history" ? "" : " · "}Printed ${esc(todayIso())}
+    Care plan version ${plan.version} · ${plan.status === "active" ? "Current" : "Archived"} · Effective from ${esc(plan.effective_from)}
+    ${plan.created_by_name ? ` · Prepared by ${esc(plan.created_by_name)}` : ""} · Printed ${esc(todayIso())}
   </p>
   ${body}`,
   );
@@ -346,8 +311,7 @@ export function buildCarePlanHtml(
 
 function fileBaseName(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope): string {
   const who = serviceUser ? `${serviceUser.first_name}-${serviceUser.last_name}` : `service-user-${plan.service_user_id}`;
-  const version = scope.kind === "history" ? "" : `-v${plan.version}`;
-  return fileSlug(`${scopeTitle(scope)}-${who}${version}`);
+  return fileSlug(`${scopeTitle(scope)}-${who}-v${plan.version}`);
 }
 
 export function printCarePlan(plan: CarePlan, serviceUser: ServiceUser | undefined, scope: CarePlanExportScope = { kind: "full" }): void {
